@@ -1,0 +1,46 @@
+stage:
+  id: 01_capture_sd3_medium_short
+  name: capture
+  description: "Short transformer pilot for SD3 Medium: image generation plus selected transformer-block activations only."
+  claim_level: pilot_only
+  artifacts:
+    - samples/*/image.png
+    - captures/*/activations/step_*/
+model:
+  name: sd3_medium
+  family: transformer
+  pipeline_class: sd3
+  model_id: stabilityai/stable-diffusion-3-medium-diffusers
+  dtype: float16
+  device: cuda
+  negative_prompt: ""
+generation:
+  height: 1024
+  width: 1024
+  guidance_scale: 7.0
+  num_inference_steps: 28
+  negative_prompt: ""
+data:
+  prompts_path: prompts/pilot_prompts.jsonl
+  max_prompts: 64
+  output_dir: outputs/sd3_medium/01_capture
+capture:
+  step_indices: [0, 13, 27]
+  save_latents: true
+  attention:
+    enabled: false
+    reason: "Transformer attention probability capture is intentionally postponed; block hooks are enough for pilot comparison."
+  activation_modules:
+    - transformer_blocks.0
+    - transformer_blocks.11
+    - transformer_blocks.23
+runtime:
+  seed_start: 0
+  num_seeds: 1
+  enable_model_cpu_offload: true
+  torch_compile: false
+  enable_xformers_memory_efficient_attention: false
+resources:
+  preferred_gpu: g2.2
+  minimum_gpu: g2.1
+  estimated_storage_gb: 80

@@ -1,0 +1,4 @@
+{"id":"move_dog_top_left","prompt":"a dog on a bench","target_word":"dog","quadrant":"top_left","entities":[{"label":"dog","token":"dog"},{"label":"bench","token":"bench"}]}
+{"id":"boost_car_top_right","prompt":"a red car beside a tree","target_word":"car","quadrant":"top_right","entities":[{"label":"car","token":"car"},{"label":"tree","token":"tree"}]}
+{"id":"boost_cup_bottom_left","prompt":"a cup next to a book","target_word":"cup","quadrant":"bottom_left","entities":[{"label":"cup","token":"cup"},{"label":"book","token":"book"}]}
+{"id":"boost_flower_bottom_right","prompt":"yellow flowers in a blue vase","target_word":"flowers","quadrant":"bottom_right","entities":[{"label":"flowers","token":"flowers"},{"label":"vase","token":"vase"}]}

@@ -1,0 +1,27 @@
+stage:
+  id: 03_sae_training_sd3_medium_short
+  name: sae_training
+  description: "Very small SD3 Medium pilot SAE on one transformer block; used only as architectural evidence."
+  claim_level: pilot_only
+  artifacts:
+    - sae.pt
+    - history.json
+    - report.json
+model:
+  name: sd3_medium
+  family: transformer
+  device: cuda
+data:
+  capture_dir: outputs/sd3_medium/01_capture/captures
+  output_dir: outputs/sd3_medium/03_sae_pilot
+sae:
+  layer: transformer_blocks.11
+  step: 13
+  expansion_factor: 2
+  k: 16
+  batch_size: 2048
+  learning_rate: 0.0001
+  weight_decay: 0.0
+  num_epochs: 1
+  max_activation_files: 128
+  max_tokens_per_file: 2048

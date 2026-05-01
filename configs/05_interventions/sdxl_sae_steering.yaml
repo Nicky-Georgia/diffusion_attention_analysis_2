@@ -1,0 +1,36 @@
+stage:
+  id: 05_intervention_sdxl_sae_steering
+  name: intervention
+  description: "SDXL transfer feature-level steering on reduced subset."
+  claim_level: transfer
+  artifacts:
+    - samples/*/steered.png
+    - report.json
+model:
+  name: sdxl
+  family: unet
+  pipeline_class: auto_t2i
+  model_id: stabilityai/stable-diffusion-xl-base-1.0
+  dtype: float16
+  device: cuda
+  negative_prompt: ""
+generation:
+  height: 1024
+  width: 1024
+  guidance_scale: 6.5
+  num_inference_steps: 40
+  negative_prompt: ""
+data:
+  prompts_path: prompts/intervention_prompts.jsonl
+  sae_checkpoint: outputs/sdxl/03_sae_mid/sae.pt
+  output_dir: outputs/sdxl/05_intervention_sae_steering
+intervention:
+  kind: sae_steering
+  module: mid_block.attentions.0
+  target_steps: [19]
+  concept_ids: [0, 1]
+  betas: [-2.0, 2.0]
+runtime:
+  seed_start: 0
+  num_seeds: 1
+  enable_model_cpu_offload: true

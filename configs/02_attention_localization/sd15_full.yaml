@@ -1,0 +1,23 @@
+stage:
+  id: 02_attention_localization_sd15_full
+  name: attention_localization
+  description: "Evaluate whether SD1.5 cross-attention maps align with object masks."
+  claim_level: main
+  artifacts:
+    - attention_localization_rows.csv
+    - attention_localization_by_step.csv
+    - report.json
+model:
+  name: sd15
+  family: unet
+  device: cuda
+data:
+  capture_dir: outputs/sd15/01_capture/captures
+  annotations_dir: annotations
+  output_dir: outputs/sd15/02_attention_localization
+metrics:
+  metric_suite: unet_attention_localization
+  steps: [0, 24, 49]
+  layer_files: []
+  threshold: 0.3
+  centroid_tolerance_px: 2.0

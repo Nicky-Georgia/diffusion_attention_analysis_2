@@ -1,0 +1,8 @@
+{"id":"single_dog","prompt":"a photo of a dog on grass","entities":[{"label":"dog","token":"dog"},{"label":"grass","token":"grass"}]}
+{"id":"red_car","prompt":"a red car on a city street","entities":[{"label":"car","token":"car"},{"label":"street","token":"street"}]}
+{"id":"cat_chair","prompt":"a cat sitting on a wooden chair","entities":[{"label":"cat","token":"cat"},{"label":"chair","token":"chair"}]}
+{"id":"two_objects","prompt":"a dog next to a bicycle","entities":[{"label":"dog","token":"dog"},{"label":"bicycle","token":"bicycle"}]}
+{"id":"spatial_left_right","prompt":"a cup to the left of a book","entities":[{"label":"cup","token":"cup"},{"label":"book","token":"book"}]}
+{"id":"attribute_color","prompt":"a blue vase with yellow flowers","entities":[{"label":"vase","token":"vase"},{"label":"flowers","token":"flowers"}]}
+{"id":"person_umbrella","prompt":"a person holding an umbrella in the rain","entities":[{"label":"person","token":"person"},{"label":"umbrella","token":"umbrella"}]}
+{"id":"rare_composition","prompt":"a small robot reading a newspaper on a bench","entities":[{"label":"robot","token":"robot"},{"label":"newspaper","token":"newspaper"},{"label":"bench","token":"bench"}]}

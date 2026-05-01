@@ -1,0 +1,8 @@
+[project]
+name = "diffusion-attention-analysis-v2"
+version = "0.2.0"
+description = "Stage-configured experiments for attention and representation analysis in text-to-image diffusion models."
+requires-python = ">=3.10"
+
+[tool.setuptools.packages.find]
+where = ["src"]

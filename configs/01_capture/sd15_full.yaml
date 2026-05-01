@@ -1,0 +1,54 @@
+stage:
+  id: 01_capture_sd15_full
+  name: capture
+  description: "Full UNet baseline: generate images and capture cross-attention, residual updates, and latents."
+  claim_level: main
+  artifacts:
+    - samples/*/image.png
+    - captures/*/attention/step_*/
+    - captures/*/activations/step_*/
+    - manifest.json
+model:
+  name: sd15
+  family: unet
+  pipeline_class: auto_t2i
+  model_id: runwayml/stable-diffusion-v1-5
+  dtype: float16
+  device: cuda
+  negative_prompt: ""
+generation:
+  height: 512
+  width: 512
+  guidance_scale: 7.5
+  num_inference_steps: 50
+  negative_prompt: ""
+data:
+  prompts_path: prompts/pilot_prompts.jsonl
+  max_prompts: 1000
+  output_dir: outputs/sd15/01_capture
+capture:
+  step_indices: [0, 24, 49]
+  save_latents: true
+  attention:
+    enabled: true
+    include_cross: true
+    include_self: false
+    save_headwise: false
+    layer_whitelist:
+      - down_blocks.2
+      - mid_block
+      - up_blocks.1
+  activation_modules:
+    - down_blocks.2.attentions.1
+    - mid_block.attentions.0
+    - up_blocks.1.attentions.0
+runtime:
+  seed_start: 0
+  num_seeds: 2
+  enable_model_cpu_offload: false
+  torch_compile: false
+  enable_xformers_memory_efficient_attention: false
+resources:
+  preferred_gpu: g2.2
+  minimum_gpu: g2.1
+  estimated_storage_gb: 300

@@ -1,0 +1,4 @@
+name: final_comparison
+configs:
+  - configs/06_comparison/unet_main_comparison.yaml
+  - configs/06_comparison/all_models_pilot_summary.yaml

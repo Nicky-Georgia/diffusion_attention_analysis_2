@@ -1,0 +1,13 @@
+stage:
+  id: 04_concept_dictionary_sana_short
+  name: concept_dictionary
+  enabled: false
+  description: "Disabled by design. SANA pilot avoids full concept dictionary claims."
+  claim_level: pilot_only
+  skip_reason: "Transformer concept dictionaries are outside the shortened SANA pipeline for this thesis run."
+model:
+  name: sana
+  family: transformer
+  device: cuda
+data:
+  output_dir: outputs/sana/04_concept_dictionary_disabled

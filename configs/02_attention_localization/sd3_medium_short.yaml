@@ -1,0 +1,19 @@
+stage:
+  id: 02_diagnostics_sd3_medium_short
+  name: attention_localization
+  description: "Short transformer diagnostic: summarize block activation statistics instead of full attention localization."
+  claim_level: pilot_only
+  artifacts:
+    - transformer_activation_rows.csv
+    - transformer_activation_summary.csv
+    - report.json
+model:
+  name: sd3_medium
+  family: transformer
+  device: cuda
+data:
+  capture_dir: outputs/sd3_medium/01_capture/captures
+  output_dir: outputs/sd3_medium/02_transformer_diagnostics
+metrics:
+  metric_suite: transformer_short_diagnostics
+  max_activation_files: 512

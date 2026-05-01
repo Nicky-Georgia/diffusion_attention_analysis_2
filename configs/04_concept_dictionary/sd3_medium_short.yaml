@@ -1,0 +1,13 @@
+stage:
+  id: 04_concept_dictionary_sd3_medium_short
+  name: concept_dictionary
+  enabled: false
+  description: "Disabled by design. SD3 Medium transformer pilot stops at activation diagnostics and small SAE; no mask-based dictionary claim."
+  claim_level: pilot_only
+  skip_reason: "Transformer concept dictionaries are outside the shortened SD3 pipeline for this thesis run."
+model:
+  name: sd3_medium
+  family: transformer
+  device: cuda
+data:
+  output_dir: outputs/sd3_medium/04_concept_dictionary_disabled

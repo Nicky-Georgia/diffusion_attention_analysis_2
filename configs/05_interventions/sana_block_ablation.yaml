@@ -1,0 +1,36 @@
+stage:
+  id: 05_intervention_sana_block_ablation
+  name: intervention
+  description: "Short SANA causal pilot: scale selected transformer block residual updates."
+  claim_level: pilot_only
+  artifacts:
+    - samples/*/ablation.png
+    - report.json
+model:
+  name: sana
+  family: transformer
+  pipeline_class: sana
+  model_id: Efficient-Large-Model/Sana_1600M_1024px_BF16_diffusers
+  dtype: bfloat16
+  device: cuda
+  negative_prompt: null
+generation:
+  height: 1024
+  width: 1024
+  guidance_scale: 4.5
+  num_inference_steps: 20
+  negative_prompt: null
+data:
+  prompts_path: prompts/intervention_prompts.jsonl
+  max_prompts: 12
+  output_dir: outputs/sana/05_block_ablation
+intervention:
+  kind: transformer_block_ablation
+  modules:
+    - transformer_blocks.10
+  target_steps: [9]
+  scales: [0.0, 0.5]
+runtime:
+  seed_start: 0
+  num_seeds: 1
+  enable_model_cpu_offload: true

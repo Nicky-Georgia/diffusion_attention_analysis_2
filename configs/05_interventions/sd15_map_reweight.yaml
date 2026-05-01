@@ -1,0 +1,46 @@
+stage:
+  id: 05_intervention_sd15_map_reweight
+  name: intervention
+  description: "SD1.5 map-level causal probe: reweight cross-attention for target token in target region."
+  claim_level: main
+  artifacts:
+    - samples/*/intervention.png
+    - captures/*/attention/step_*/
+    - report.json
+model:
+  name: sd15
+  family: unet
+  pipeline_class: auto_t2i
+  model_id: runwayml/stable-diffusion-v1-5
+  dtype: float16
+  device: cuda
+  negative_prompt: ""
+generation:
+  height: 512
+  width: 512
+  guidance_scale: 7.5
+  num_inference_steps: 50
+  negative_prompt: ""
+data:
+  prompts_path: prompts/intervention_prompts.jsonl
+  max_prompts: 40
+  output_dir: outputs/sd15/05_intervention_map_reweight
+capture:
+  step_indices: [24]
+  attention:
+    layer_whitelist:
+      - mid_block
+      - up_blocks.1
+intervention:
+  kind: map_reweight
+  target_steps: [24]
+  strengths: [2.0, 4.0]
+  outside_multiplier: 1.0
+  attention_resolution: [16, 16]
+  target_layer_fragments:
+    - mid_block
+    - up_blocks.1
+runtime:
+  seed_start: 0
+  num_seeds: 2
+  enable_model_cpu_offload: false

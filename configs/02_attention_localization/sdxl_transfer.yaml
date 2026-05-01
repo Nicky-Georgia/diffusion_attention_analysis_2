@@ -1,0 +1,23 @@
+stage:
+  id: 02_attention_localization_sdxl_transfer
+  name: attention_localization
+  description: "SDXL transfer check for attention localization on matched subset."
+  claim_level: transfer
+  artifacts:
+    - attention_localization_rows.csv
+    - attention_localization_by_step.csv
+    - report.json
+model:
+  name: sdxl
+  family: unet
+  device: cuda
+data:
+  capture_dir: outputs/sdxl/01_capture/captures
+  annotations_dir: annotations
+  output_dir: outputs/sdxl/02_attention_localization
+metrics:
+  metric_suite: unet_attention_localization
+  steps: [0, 19, 39]
+  layer_files: []
+  threshold: 0.3
+  centroid_tolerance_px: 2.0

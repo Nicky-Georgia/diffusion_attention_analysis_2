@@ -1,0 +1,51 @@
+stage:
+  id: 06_comparison_unet_main
+  name: comparison
+  description: "Quantitative comparison of main UNet results: SD1.5 full baseline vs SDXL transfer."
+  claim_level: comparison
+  artifacts:
+    - comparison_summary.csv
+    - report.json
+model:
+  name: comparison_unet
+  family: comparison
+data:
+  output_dir: outputs/comparison/unet_main
+comparison:
+  interpretation_rules:
+    - "SD1.5 is the main statistical baseline."
+    - "SDXL is a transfer check and should not be described as equally exhaustive unless the same prompt count is run."
+    - "Attention localization, SAE, and interventions should be interpreted jointly."
+  inputs:
+    - model: sd15
+      stage: attention_localization
+      claim_level: main
+      report_path: outputs/sd15/02_attention_localization/report.json
+    - model: sdxl
+      stage: attention_localization
+      claim_level: transfer
+      report_path: outputs/sdxl/02_attention_localization/report.json
+    - model: sd15
+      stage: sae_training
+      claim_level: main
+      report_path: outputs/sd15/03_sae_mid/report.json
+    - model: sdxl
+      stage: sae_training
+      claim_level: transfer
+      report_path: outputs/sdxl/03_sae_mid/report.json
+    - model: sd15
+      stage: concept_dictionary
+      claim_level: main
+      report_path: outputs/sd15/04_concept_dictionary/report.json
+    - model: sdxl
+      stage: concept_dictionary
+      claim_level: transfer
+      report_path: outputs/sdxl/04_concept_dictionary/report.json
+    - model: sd15
+      stage: map_intervention
+      claim_level: main
+      report_path: outputs/sd15/05_intervention_map_reweight/report.json
+    - model: sd15
+      stage: sae_intervention
+      claim_level: main
+      report_path: outputs/sd15/05_intervention_sae_steering/report.json

@@ -1,0 +1,36 @@
+stage:
+  id: 05_intervention_sd3_medium_block_ablation
+  name: intervention
+  description: "Short SD3 Medium causal pilot: scale selected transformer block residual updates."
+  claim_level: pilot_only
+  artifacts:
+    - samples/*/ablation.png
+    - report.json
+model:
+  name: sd3_medium
+  family: transformer
+  pipeline_class: sd3
+  model_id: stabilityai/stable-diffusion-3-medium-diffusers
+  dtype: float16
+  device: cuda
+  negative_prompt: ""
+generation:
+  height: 1024
+  width: 1024
+  guidance_scale: 7.0
+  num_inference_steps: 28
+  negative_prompt: ""
+data:
+  prompts_path: prompts/intervention_prompts.jsonl
+  max_prompts: 12
+  output_dir: outputs/sd3_medium/05_block_ablation
+intervention:
+  kind: transformer_block_ablation
+  modules:
+    - transformer_blocks.11
+  target_steps: [13]
+  scales: [0.0, 0.5]
+runtime:
+  seed_start: 0
+  num_seeds: 1
+  enable_model_cpu_offload: true

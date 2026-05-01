@@ -1,0 +1,53 @@
+stage:
+  id: 01_capture_sdxl_transfer
+  name: capture
+  description: "SDXL transfer capture on matched subset; not a second full baseline."
+  claim_level: transfer
+  artifacts:
+    - samples/*/image.png
+    - captures/*/attention/step_*/
+    - captures/*/activations/step_*/
+model:
+  name: sdxl
+  family: unet
+  pipeline_class: auto_t2i
+  model_id: stabilityai/stable-diffusion-xl-base-1.0
+  dtype: float16
+  device: cuda
+  negative_prompt: ""
+generation:
+  height: 1024
+  width: 1024
+  guidance_scale: 6.5
+  num_inference_steps: 40
+  negative_prompt: ""
+data:
+  prompts_path: prompts/pilot_prompts.jsonl
+  max_prompts: 250
+  output_dir: outputs/sdxl/01_capture
+capture:
+  step_indices: [0, 19, 39]
+  save_latents: true
+  attention:
+    enabled: true
+    include_cross: true
+    include_self: false
+    save_headwise: false
+    layer_whitelist:
+      - down_blocks.2
+      - mid_block
+      - up_blocks.1
+  activation_modules:
+    - down_blocks.2.attentions.1
+    - mid_block.attentions.0
+    - up_blocks.1.attentions.0
+runtime:
+  seed_start: 0
+  num_seeds: 1
+  enable_model_cpu_offload: true
+  torch_compile: false
+  enable_xformers_memory_efficient_attention: false
+resources:
+  preferred_gpu: g2.2
+  minimum_gpu: g2.1
+  estimated_storage_gb: 150

@@ -1,0 +1,8 @@
+name: sd15_full_pipeline
+configs:
+  - configs/01_capture/sd15_full.yaml
+  - configs/02_attention_localization/sd15_full.yaml
+  - configs/03_sae_training/sd15_full.yaml
+  - configs/04_concept_dictionary/sd15_full.yaml
+  - configs/05_interventions/sd15_map_reweight.yaml
+  - configs/05_interventions/sd15_sae_steering.yaml

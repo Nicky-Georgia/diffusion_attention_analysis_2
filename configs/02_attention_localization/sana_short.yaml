@@ -1,0 +1,19 @@
+stage:
+  id: 02_diagnostics_sana_short
+  name: attention_localization
+  description: "Short transformer diagnostic for SANA: summarize block activation statistics; no raw-attention localization claim."
+  claim_level: pilot_only
+  artifacts:
+    - transformer_activation_rows.csv
+    - transformer_activation_summary.csv
+    - report.json
+model:
+  name: sana
+  family: transformer
+  device: cuda
+data:
+  capture_dir: outputs/sana/01_capture/captures
+  output_dir: outputs/sana/02_transformer_diagnostics
+metrics:
+  metric_suite: transformer_short_diagnostics
+  max_activation_files: 512

@@ -1,0 +1,27 @@
+stage:
+  id: 03_sae_training_sdxl_transfer
+  name: sae_training
+  description: "Reduced SDXL SAE to check whether SD1.5 sparse-feature findings transfer."
+  claim_level: transfer
+  artifacts:
+    - sae.pt
+    - history.json
+    - report.json
+model:
+  name: sdxl
+  family: unet
+  device: cuda
+data:
+  capture_dir: outputs/sdxl/01_capture/captures
+  output_dir: outputs/sdxl/03_sae_mid
+sae:
+  layer: mid_block.attentions.0
+  step: 19
+  expansion_factor: 4
+  k: 20
+  batch_size: 4096
+  learning_rate: 0.0001
+  weight_decay: 0.0
+  num_epochs: 2
+  max_activation_files: 512
+  max_tokens_per_file: 4096

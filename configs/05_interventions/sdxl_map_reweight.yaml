@@ -1,0 +1,45 @@
+stage:
+  id: 05_intervention_sdxl_map_reweight
+  name: intervention
+  description: "SDXL transfer map-level causal probe on smaller prompt subset."
+  claim_level: transfer
+  artifacts:
+    - samples/*/intervention.png
+    - report.json
+model:
+  name: sdxl
+  family: unet
+  pipeline_class: auto_t2i
+  model_id: stabilityai/stable-diffusion-xl-base-1.0
+  dtype: float16
+  device: cuda
+  negative_prompt: ""
+generation:
+  height: 1024
+  width: 1024
+  guidance_scale: 6.5
+  num_inference_steps: 40
+  negative_prompt: ""
+data:
+  prompts_path: prompts/intervention_prompts.jsonl
+  max_prompts: 20
+  output_dir: outputs/sdxl/05_intervention_map_reweight
+capture:
+  step_indices: [19]
+  attention:
+    layer_whitelist:
+      - mid_block
+      - up_blocks.1
+intervention:
+  kind: map_reweight
+  target_steps: [19]
+  strengths: [2.0, 4.0]
+  outside_multiplier: 1.0
+  attention_resolution: [32, 32]
+  target_layer_fragments:
+    - mid_block
+    - up_blocks.1
+runtime:
+  seed_start: 0
+  num_seeds: 1
+  enable_model_cpu_offload: true
