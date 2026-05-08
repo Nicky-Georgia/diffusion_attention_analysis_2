@@ -1,0 +1,32 @@
+stage:
+  id: 02a_generate_masks_sd15_clipseg
+  name: mask_generation
+  description: "Generate CLIPSeg pseudo-masks for SD1.5 generated images before attention-localization metrics."
+  claim_level: preprocessing
+  artifacts:
+    - annotations/sd15/*/*.png
+    - annotations/sd15/*/mask_manifest.json
+    - annotations/sd15/mask_manifest.csv
+    - annotations/sd15/report.json
+model:
+  name: sd15
+  family: unet
+  device: cuda
+data:
+  samples_dir: outputs/sd15/01_capture/samples
+  output_dir: annotations/sd15
+masking:
+  method: clipseg
+  model_id: CIDAS/clipseg-rd64-refined
+  text_template: "{label}"
+  relative_threshold: 0.55
+  min_area_fraction: 0.002
+  max_area_fraction: 0.80
+  fallback_top_fraction: 0.12
+  max_samples: null
+  include_labels: []
+  exclude_labels: []
+  save_soft_masks: false
+  save_previews: true
+  preview_max_samples: 24
+  force: false

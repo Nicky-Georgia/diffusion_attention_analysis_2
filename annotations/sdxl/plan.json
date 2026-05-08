@@ -1,0 +1,31 @@
+{
+  "stage": {
+    "id": "02a_generate_masks_sdxl_clipseg",
+    "name": "mask_generation",
+    "description": "Generate CLIPSeg pseudo-masks for SDXL transfer images before attention-localization metrics.",
+    "claim_level": "preprocessing",
+    "enabled": true
+  },
+  "model": {
+    "name": "sdxl",
+    "family": "unet",
+    "pipeline_class": null,
+    "model_id": null
+  },
+  "data": {
+    "prompts_path": null,
+    "max_prompts": null,
+    "output_dir": "annotations/sdxl"
+  },
+  "expected_artifacts": [
+    "annotations/sdxl/*/*.png",
+    "annotations/sdxl/*/mask_manifest.json",
+    "annotations/sdxl/mask_manifest.csv",
+    "annotations/sdxl/report.json"
+  ],
+  "logic_check": {
+    "question": "Create binary pseudo-masks aligned to generated images for Stage-2 attention localization.",
+    "method": "CLIPSeg text-conditioned segmentation per prompt entity; masks are saved under annotations/<model>/<sample_id>/<token>.png.",
+    "guardrail": "A per-sample mask_manifest.json preserves token aliases when filenames are sanitized."
+  }
+}
