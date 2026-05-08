@@ -9,6 +9,8 @@ from .progress import JsonProgress
 def _stage_module(stage_name: str):
     if stage_name == "capture":
         from .stages import capture as module
+    elif stage_name == "mask_generation":
+        from .stages import mask_generation as module
     elif stage_name == "attention_localization":
         from .stages import evaluate_attention as module
     elif stage_name == "sae_training":
