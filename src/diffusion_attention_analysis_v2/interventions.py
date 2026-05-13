@@ -76,6 +76,9 @@ def quadrant_mask(height: int, width: int, quadrant: str) -> torch.Tensor:
 
 
 class ResidualConceptSteerer:
+    # SD3_ACTIVE_TOKEN_STEERING_V3:
+    # Add SAE decoder directions to the original residual update.
+    # Optional active-token mode localizes the edit to spatial tokens where the selected SAE features already activate.
     def __init__(self, sae, concept_ids: Sequence[int], beta: float, *, step_getter: Callable[[], int], active_steps: Sequence[int] | None = None, device: str = "cuda") -> None:
         self.sae = sae.to(device)
         self.concept_ids = [int(x) for x in concept_ids]
@@ -83,6 +86,84 @@ class ResidualConceptSteerer:
         self.step_getter = step_getter
         self.active_steps = {int(x) for x in active_steps or []}
         self.device = device
+        import os as _os
+        self.branch_mode = _os.environ.get("SD3_SAE_BRANCH_MODE", "cond").strip().lower()
+        self.direction_mode = _os.environ.get("SD3_SAE_DIRECTION_MODE", "sum_decoder_direction").strip().lower()
+        self.spatial_mode = _os.environ.get("SD3_SAE_SPATIAL_MODE", "all").strip().lower()
+        self.top_frac = float(_os.environ.get("SD3_SAE_TOP_FRAC", "0.15"))
+        self.active_quantile = float(_os.environ.get("SD3_SAE_ACTIVE_QUANTILE", "0.85"))
+        self.outside_scale = float(_os.environ.get("SD3_SAE_OUTSIDE_SCALE", "0.0"))
+        self.normalize_direction = _os.environ.get("SD3_SAE_NORMALIZE_DIRECTION", "none").strip().lower()
+        self.beta_scale_mode = _os.environ.get("SD3_SAE_BETA_SCALE_MODE", "constant").strip().lower()
+
+    def _valid_ids(self, max_dim: int) -> list[int]:
+        return [i for i in self.concept_ids if 0 <= int(i) < int(max_dim)]
+
+    def _direction(self, flat: torch.Tensor) -> torch.Tensor | None:
+        with torch.no_grad():
+            W = self.sae.decoder.weight.detach().to(device=flat.device, dtype=flat.dtype)
+            valid = self._valid_ids(W.shape[1])
+            if not valid:
+                return None
+            dirs = W[:, valid]
+            if self.direction_mode in {"mean", "mean_decoder_direction"}:
+                direction = dirs.mean(dim=1)
+            else:
+                direction = dirs.sum(dim=1)
+            if self.normalize_direction in {"rms", "unit_rms"}:
+                direction = direction / direction.pow(2).mean().sqrt().clamp_min(1e-6)
+            elif self.normalize_direction in {"l2", "unit_l2"}:
+                direction = direction / direction.norm().clamp_min(1e-6)
+            return direction.reshape(1, -1)
+
+    def _branch_mask(self, feature_shape: Sequence[int], flat: torch.Tensor) -> torch.Tensor:
+        mask = torch.ones((flat.shape[0], 1), device=flat.device, dtype=flat.dtype)
+        if len(feature_shape) != 3:
+            return mask
+        b, n, c = [int(x) for x in feature_shape]
+        if b < 2 or b % 2 != 0:
+            return mask
+        branch_mode = self.branch_mode if self.branch_mode in {"cond", "conditional", "uncond", "unconditional", "all"} else "cond"
+        if branch_mode == "all":
+            return mask
+        m = torch.zeros((b, n, 1), device=flat.device, dtype=flat.dtype)
+        half = b // 2
+        if branch_mode in {"cond", "conditional"}:
+            m[half:] = 1.0
+        else:
+            m[:half] = 1.0
+        return m.reshape(-1, 1)
+
+    def _active_token_mask(self, flat: torch.Tensor, feature_shape: Sequence[int]) -> torch.Tensor:
+        if self.spatial_mode in {"all", "global", "none"} or len(feature_shape) != 3:
+            return torch.ones((flat.shape[0], 1), device=flat.device, dtype=flat.dtype)
+        b, n, c = [int(x) for x in feature_shape]
+        with torch.no_grad():
+            z = self.sae.encode(flat)
+            valid = self._valid_ids(z.shape[-1])
+            if not valid:
+                return torch.ones((flat.shape[0], 1), device=flat.device, dtype=flat.dtype)
+            signal = z[:, valid].float().amax(dim=-1).reshape(b, n)
+            mask = torch.full((b, n), float(self.outside_scale), device=flat.device, dtype=flat.dtype)
+            if self.spatial_mode in {"top_frac", "active_top", "active_tokens"}:
+                k = max(1, min(n, int(round(float(self.top_frac) * n))))
+                idx = torch.topk(signal, k=k, dim=1).indices
+                mask.scatter_(1, idx, 1.0)
+            else:
+                q = float(self.active_quantile)
+                q = min(max(q, 0.0), 0.999)
+                thresh = torch.quantile(signal, q, dim=1, keepdim=True)
+                active = signal >= thresh
+                # Fallback if activations are nearly flat.
+                need_fallback = active.sum(dim=1) < 1
+                if need_fallback.any():
+                    k = max(1, min(n, int(round(float(self.top_frac) * n))))
+                    idx = torch.topk(signal[need_fallback], k=k, dim=1).indices
+                    rows = torch.where(need_fallback)[0]
+                    active[rows] = False
+                    active[rows.unsqueeze(1), idx] = True
+                mask[active] = 1.0
+            return mask.reshape(-1, 1).to(dtype=flat.dtype)
 
     def __call__(self, module, inputs, output):
         step = int(self.step_getter())
@@ -99,16 +180,21 @@ class ResidualConceptSteerer:
         except ValueError:
             return output
         flat = flat.to(self.device)
+        direction = self._direction(flat)
+        if direction is None:
+            return output
         with torch.no_grad():
-            z = self.sae.encode(flat)
-            valid = [i for i in self.concept_ids if 0 <= i < z.shape[-1]]
-            if valid:
-                z[:, valid] = z[:, valid] + self.beta
-            steered = self.sae.decode(z)
-        steered = unflatten_feature_map(steered, shape, like=x_out)
+            if self.beta_scale_mode in {"activation_rms", "token_rms"}:
+                local_scale = flat.pow(2).mean(dim=-1, keepdim=True).sqrt().clamp_min(1e-6)
+                delta = self.beta * local_scale * direction.expand_as(flat)
+            else:
+                delta = self.beta * direction.expand_as(flat)
+            delta = delta * self._active_token_mask(flat, shape)
+            delta = delta * self._branch_mask(shape, flat)
+            steered_flat = flat + delta
+        steered = unflatten_feature_map(steered_flat, shape, like=x_out)
         new_tensor = x_in + steered if residual_mode else steered
         return replace_first_tensor(output, new_tensor, x_out.shape)
-
 
 class BlockOutputScaler:
     def __init__(self, scale: float, *, step_getter: Callable[[], int], active_steps: Sequence[int] | None = None) -> None:

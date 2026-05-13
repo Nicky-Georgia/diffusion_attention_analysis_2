@@ -1,8 +1,0 @@
-name: sdxl_transfer_pipeline
-configs:
-  - configs/01_capture/sdxl_transfer.yaml
-  - configs/02_attention_localization/sdxl_transfer.yaml
-  - configs/03_sae_training/sdxl_transfer.yaml
-  - configs/04_concept_dictionary/sdxl_transfer.yaml
-  - configs/05_interventions/sdxl_map_reweight.yaml
-  - configs/05_interventions/sdxl_sae_steering.yaml

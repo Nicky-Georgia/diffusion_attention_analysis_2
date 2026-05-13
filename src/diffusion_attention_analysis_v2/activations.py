@@ -9,9 +9,19 @@ from .io_utils import ensure_dir, module_to_filename
 
 
 def extract_first_tensor(obj: Any):
+    # SD3_TUPLE_SPATIAL_HOTFIX:
+    # Diffusers SD3 JointTransformerBlock can return a tuple like
+    # (encoder_hidden_states, hidden_states). The first tensor is the text/context
+    # stream, while the second tensor is the image-token stream needed for mask
+    # alignment. For such tuples, choose the tensor with more tokens.
     if isinstance(obj, torch.Tensor):
         return obj
     if isinstance(obj, (tuple, list)):
+        direct_tensors = [item for item in obj if isinstance(item, torch.Tensor)]
+        if len(direct_tensors) >= 2:
+            a, b = direct_tensors[0], direct_tensors[1]
+            if a.ndim == 3 and b.ndim == 3 and b.shape[1] > a.shape[1]:
+                return b
         for item in obj:
             found = extract_first_tensor(item)
             if found is not None:
@@ -25,27 +35,51 @@ def extract_first_tensor(obj: Any):
 
 
 def replace_first_tensor(obj: Any, new_tensor: torch.Tensor, old_shape) -> Any:
-    if isinstance(obj, torch.Tensor) and tuple(obj.shape) == tuple(old_shape):
-        return new_tensor
-    if isinstance(obj, tuple):
-        changed = False
-        out = []
-        for item in obj:
-            if not changed and isinstance(item, torch.Tensor) and tuple(item.shape) == tuple(old_shape):
-                out.append(new_tensor)
-                changed = True
-            else:
-                out.append(item)
-        return tuple(out)
-    if isinstance(obj, list):
-        out = list(obj)
-        for i, item in enumerate(out):
-            if isinstance(item, torch.Tensor) and tuple(item.shape) == tuple(old_shape):
-                out[i] = new_tensor
-                break
-        return out
-    return obj
+    # SD3_RECURSIVE_REPLACE_HOTFIX:
+    # Recursively replace the first tensor matching old_shape. This is safer for
+    # tuple outputs such as (encoder_hidden_states, hidden_states) and nested structures.
+    def _replace(x: Any):
+        if isinstance(x, torch.Tensor):
+            if tuple(x.shape) == tuple(old_shape):
+                return new_tensor, True
+            return x, False
+        if isinstance(x, tuple):
+            out = []
+            changed_any = False
+            for item in x:
+                if changed_any:
+                    out.append(item)
+                    continue
+                new_item, changed = _replace(item)
+                out.append(new_item)
+                changed_any = changed_any or changed
+            return tuple(out), changed_any
+        if isinstance(x, list):
+            out = []
+            changed_any = False
+            for item in x:
+                if changed_any:
+                    out.append(item)
+                    continue
+                new_item, changed = _replace(item)
+                out.append(new_item)
+                changed_any = changed_any or changed
+            return out, changed_any
+        if isinstance(x, dict):
+            out = {}
+            changed_any = False
+            for key, value in x.items():
+                if changed_any:
+                    out[key] = value
+                    continue
+                new_value, changed = _replace(value)
+                out[key] = new_value
+                changed_any = changed_any or changed
+            return out, changed_any
+        return x, False
 
+    out, _ = _replace(obj)
+    return out
 
 def flatten_feature_map(x: torch.Tensor) -> Tuple[torch.Tensor, List[int]]:
     if x.ndim == 4:
