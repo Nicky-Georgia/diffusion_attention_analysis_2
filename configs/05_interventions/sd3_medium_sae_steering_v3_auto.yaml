@@ -1,0 +1,37 @@
+stage:
+  id: 05_intervention_sd3_medium_sae_v3_auto
+  name: intervention
+  description: "SD3 Medium Stage 5 v3 SAE steering with stronger beta and active-token localization."
+  claim_level: sd3_causal_probe_sae_v3
+  artifacts:
+    - samples/*/steered.png
+    - report.json
+model:
+  name: sd3_medium
+  family: transformer
+  pipeline_class: sd3
+  model_id: stabilityai/stable-diffusion-3-medium-diffusers
+  dtype: float16
+  device: cuda
+  negative_prompt: ""
+generation:
+  height: 1024
+  width: 1024
+  guidance_scale: 7.0
+  num_inference_steps: 28
+  negative_prompt: ""
+data:
+  prompts_path: prompts/sd3_medium_150_seed1_stage5_v3_probes/sd3_v3_probe_person.jsonl
+  sae_checkpoint: outputs/sd3_medium_150_seed1/03_sae_spatial_step13_image_tokens/sae.pt
+  output_dir: outputs/sd3_medium_150_seed1/05_stage5_v3_retry/05b_sae_global_stronger_v3
+intervention:
+  kind: sae_steering
+  module: transformer_blocks.11
+  target_steps: [13]
+  concept_ids: [0]
+  betas: [0.0]
+  branch_mode: cond
+runtime:
+  seed_start: 0
+  num_seeds: 1
+  enable_model_cpu_offload: true

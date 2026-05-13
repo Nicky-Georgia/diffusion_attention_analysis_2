@@ -1,0 +1,38 @@
+stage:
+  id: 05_intervention_sd3_medium_block_scaling_strong_auto
+  name: intervention
+  description: "SD3 Medium addition-style strong transformer block scaling probe."
+  claim_level: sd3_causal_probe
+  artifacts:
+    - samples/*/ablation.png
+    - report.json
+model:
+  name: sd3_medium
+  family: transformer
+  pipeline_class: sd3
+  model_id: stabilityai/stable-diffusion-3-medium-diffusers
+  dtype: float16
+  device: cuda
+  negative_prompt: ""
+generation:
+  height: 1024
+  width: 1024
+  guidance_scale: 7.0
+  num_inference_steps: 28
+  negative_prompt: ""
+data:
+  prompts_path: prompts/sd3_medium_150_seed1_stage5_probes/sd3_block_probe.jsonl
+  max_prompts: 12
+  output_dir: outputs/sd3_medium_150_seed1/05_stage5_addition_style/05a_transformer_block_scaling_strong_probe
+intervention:
+  kind: transformer_block_ablation
+  modules:
+    - transformer_blocks.0
+    - transformer_blocks.11
+    - transformer_blocks.23
+  target_steps: []
+  scales: [0.0, 0.25, 0.5, 1.5, 2.0]
+runtime:
+  seed_start: 0
+  num_seeds: 1
+  enable_model_cpu_offload: true
