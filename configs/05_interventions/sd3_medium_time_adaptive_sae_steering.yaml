@@ -1,0 +1,45 @@
+stage:
+  id: 05_sd3_medium_time_adaptive_sae_steering
+  name: intervention
+  description: "SD3 Medium time-adaptive SAE decoder-direction steering over image-token residual updates."
+  claim_level: sd3_time_adaptive_causal_probe_sae_steering
+  artifacts:
+    - samples/*/steered.png
+    - intervention_rows.json
+    - report.json
+model:
+  name: sd3_medium
+  family: transformer
+  pipeline_class: sd3
+  model_id: stabilityai/stable-diffusion-3-medium-diffusers
+  dtype: float16
+  device: cuda
+  negative_prompt: ""
+generation:
+  height: 1024
+  width: 1024
+  guidance_scale: 7.0
+  num_inference_steps: 28
+  negative_prompt: ""
+data:
+  prompts_path: prompts/sd3_medium_sae_circuit_150.jsonl
+  sae_checkpoint: outputs/sd3_medium_sae_circuit_150/03_sae/mid_block11_step13/sae.pt
+  max_prompts: 2
+  output_dir: outputs/sd3_medium_sae_circuit_150/05_interventions/sae_steering/override_me
+intervention:
+  kind: sae_steering
+  module: transformer_blocks.11
+  target_steps: [13]
+  concept_ids: [0]
+  betas: [-40.0, 0.0, 40.0, 60.0]
+  branch_mode: cond
+  direction_mode: mean_decoder_direction
+  spatial_mode: active_tokens
+  active_quantile: 0.85
+  outside_scale: 0.0
+  normalize_direction: rms
+  beta_scale_mode: activation_rms
+runtime:
+  seed_start: 0
+  num_seeds: 1
+  enable_model_cpu_offload: true

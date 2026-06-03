@@ -13,9 +13,9 @@ def run(cfg: Dict[str, Any], progress, *, dry_run: bool = False) -> Dict[str, An
         return disabled
 
     logic = {
-        "question": "Can dense denoising activations be decomposed into sparse reusable features?",
-        "main_path": "SD1.5 full SAE; SDXL reduced transfer SAE",
-        "transformer_path": "short pilot SAE only; not the basis for full causal claims",
+        "question": "Can dense denoising activations be decomposed into sparse reusable SAE features?",
+        "main_path": "Train a Top-K SAE over the selected residual/image-token activations specified by layer and step.",
+        "transformer_path": "For SD3 Medium, SAE training uses image-token residual updates; full joint-attention probability maps are captured and evaluated separately as localization/circuit-edge evidence.",
     }
     if dry_run:
         return dry_run_response(cfg, progress, logic_check=logic)

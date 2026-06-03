@@ -1,0 +1,37 @@
+stage:
+  id: 05_sd3_medium_time_adaptive_block_scaling
+  name: intervention
+  description: "SD3 Medium time-window block residual scaling for causal circuit probes."
+  claim_level: sd3_time_adaptive_causal_probe_block_scaling
+  artifacts:
+    - samples/*/ablation.png
+    - intervention_rows.json
+    - report.json
+model:
+  name: sd3_medium
+  family: transformer
+  pipeline_class: sd3
+  model_id: stabilityai/stable-diffusion-3-medium-diffusers
+  dtype: float16
+  device: cuda
+  negative_prompt: ""
+generation:
+  height: 1024
+  width: 1024
+  guidance_scale: 7.0
+  num_inference_steps: 28
+  negative_prompt: ""
+data:
+  prompts_path: prompts/sd3_medium_sae_circuit_150.jsonl
+  max_prompts: 4
+  output_dir: outputs/sd3_medium_sae_circuit_150/05_interventions/block_scaling/override_me
+intervention:
+  kind: transformer_block_ablation
+  modules:
+    - transformer_blocks.11
+  target_steps: [13]
+  scales: [0.60, 0.75, 1.15, 1.35]
+runtime:
+  seed_start: 0
+  num_seeds: 1
+  enable_model_cpu_offload: true

@@ -1,0 +1,28 @@
+stage:
+  id: 02_sd3_joint_attention_localization_sae_circuit_150
+  name: attention_localization
+  description: "SD3 Medium-only localization metrics from saved full joint-attention probability maps."
+  claim_level: sd3_full_probability_map_localization
+  artifacts:
+    - sd3_joint_attention_localization_rows.csv
+    - sd3_joint_attention_localization_by_step.csv
+    - sd3_joint_attention_localization_by_layer_step.csv
+    - report.json
+model:
+  name: sd3_medium
+  family: transformer
+  device: cuda
+data:
+  capture_dir: outputs/sd3_medium_sae_circuit_150/01_capture/captures
+  annotations_dir: annotations/sd3_medium_sae_circuit_150
+  output_dir: outputs/sd3_medium_sae_circuit_150/02_attention_localization
+metrics:
+  metric_suite: sd3_joint_attention_localization
+  steps: [0, 13, 27]
+  layer_files:
+    - transformer_blocks.0.attn.processor
+    - transformer_blocks.11.attn.processor
+    - transformer_blocks.23.attn.processor
+  threshold: 0.3
+  branch_mode: cond_last
+  text_token_offset: after_image_tokens

@@ -1,0 +1,23 @@
+stage:
+  id: 04_concept_dictionary_sd3_medium_sae_circuit_base
+  name: concept_dictionary
+  description: "Base config for SD3 Medium mask-aligned SAE concept dictionary; notebook overrides layer, step, checkpoint and output_dir."
+  claim_level: sd3_time_adaptive_concept_dictionary
+  artifacts:
+    - concept_dictionary.csv
+    - concept_dictionary.json
+    - report.json
+model:
+  name: sd3_medium
+  family: transformer
+  device: cuda
+data:
+  capture_dir: outputs/sd3_medium_sae_circuit_150/01_capture/captures
+  annotations_dir: annotations/sd3_medium_sae_circuit_150
+  sae_checkpoint: outputs/sd3_medium_sae_circuit_150/03_sae/mid_block11_step13/sae.pt
+  output_dir: outputs/sd3_medium_sae_circuit_150/04_concept_dictionary/override_me
+dictionary:
+  layer: transformer_blocks.11
+  step: 13
+  top_k_features_per_label: 20
+  max_activation_files: 150

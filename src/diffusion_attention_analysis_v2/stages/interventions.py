@@ -167,6 +167,26 @@ def _sae_steering(cfg: Dict[str, Any], progress, *, dry_run: bool = False):
     target_steps = [int(x) for x in int_cfg.get("target_steps", [])]
     concept_ids = [int(x) for x in int_cfg.get("concept_ids", [])]
     betas = [float(x) for x in int_cfg.get("betas", [1.0])]
+
+    # ResidualConceptSteerer historically accepted these SD3 controls through
+    # environment variables so notebooks could sweep them quickly. Mirror config
+    # values into the same variables to make YAML-driven runs reproducible.
+    import os
+
+    steerer_env = {
+        "branch_mode": "SD3_SAE_BRANCH_MODE",
+        "direction_mode": "SD3_SAE_DIRECTION_MODE",
+        "spatial_mode": "SD3_SAE_SPATIAL_MODE",
+        "top_frac": "SD3_SAE_TOP_FRAC",
+        "active_quantile": "SD3_SAE_ACTIVE_QUANTILE",
+        "outside_scale": "SD3_SAE_OUTSIDE_SCALE",
+        "normalize_direction": "SD3_SAE_NORMALIZE_DIRECTION",
+        "beta_scale_mode": "SD3_SAE_BETA_SCALE_MODE",
+    }
+    for cfg_key, env_key in steerer_env.items():
+        if cfg_key in int_cfg and int_cfg[cfg_key] is not None:
+            os.environ[env_key] = str(int_cfg[cfg_key])
+
     seed_start = int(deep_get(cfg, "runtime.seed_start", 0))
     num_seeds = int(deep_get(cfg, "runtime.num_seeds", 1))
     device = str(deep_get(cfg, "model.device", "cuda"))
@@ -179,10 +199,22 @@ def _sae_steering(cfg: Dict[str, Any], progress, *, dry_run: bool = False):
         progress.skip(message="module not found", module=module)
         return report
     current = {"step": -1}
+    denoiser_call = {"idx": -1}
+
     def set_step(i):
         current["step"] = i
+
     def get_step():
         return current["step"]
+
+    def _denoiser_step_pre_hook(module_, inputs):
+        # Stage callbacks in Diffusers run after the denoiser forward, while
+        # forward hooks on transformer blocks run inside it. Track the root
+        # denoiser forward so intervention hooks see the actual step index.
+        denoiser_call["idx"] += 1
+        current["step"] = int(denoiser_call["idx"])
+
+    step_tracker_handle = denoiser.register_forward_pre_hook(_denoiser_step_pre_hook)
     sample_root = ensure_dir(out_dir / "samples")
     total = len(prompts) * num_seeds * len(betas)
     progress.start(total=total, message="SAE steering started", resolved_modules=resolved)
@@ -194,6 +226,8 @@ def _sae_steering(cfg: Dict[str, Any], progress, *, dry_run: bool = False):
             seed = seed_start + s
             for beta in betas:
                 sample_id = f"{safe_name(prompt_id)}_seed_{seed:04d}_beta_{beta:g}"
+                denoiser_call["idx"] = -1
+                current["step"] = -1
                 steerer = ResidualConceptSteerer(sae, concept_ids, beta, step_getter=get_step, active_steps=target_steps, device=device)
                 handles = [modules[name].register_forward_hook(steerer) for name in resolved]
                 try:
@@ -206,7 +240,17 @@ def _sae_steering(cfg: Dict[str, Any], progress, *, dry_run: bool = False):
                 save_json(sample_dir / "metadata.json", meta)
                 rows.append(meta)
                 progress.update(message="SAE steering generated", sample_id=sample_id)
-    report = {"status": "ok", "samples": len(rows), "kind": "sae_steering", "resolved_modules": resolved}
+    remove_hooks([step_tracker_handle])
+    report = {
+        "status": "ok",
+        "samples": len(rows),
+        "kind": "sae_steering",
+        "resolved_modules": resolved,
+        "target_steps": target_steps,
+        "concept_ids": concept_ids,
+        "betas": betas,
+        "steerer_config": {k: int_cfg.get(k) for k in steerer_env.keys() if k in int_cfg},
+    }
     save_json(out_dir / "intervention_rows.json", rows)
     save_json(out_dir / "report.json", report)
     progress.end(message="SAE steering finished", samples=len(rows))
@@ -220,7 +264,7 @@ def _block_ablation(cfg: Dict[str, Any], progress, *, dry_run: bool = False):
 
     logic = {
         "question": "Do selected transformer blocks causally affect generation when their residual output is scaled?",
-        "scope": "pilot-only causal diagnostic; not a token-level attention localization claim",
+        "scope": "SD3 time-window causal diagnostic; this is a residual-stream intervention, not an attention-probability localization claim.",
     }
     if dry_run:
         return dry_run_response(cfg, progress, logic_check=logic)
@@ -246,10 +290,19 @@ def _block_ablation(cfg: Dict[str, Any], progress, *, dry_run: bool = False):
     seed_start = int(deep_get(cfg, "runtime.seed_start", 0))
     num_seeds = int(deep_get(cfg, "runtime.num_seeds", 1))
     current = {"step": -1}
+    denoiser_call = {"idx": -1}
+
     def set_step(i):
         current["step"] = i
+
     def get_step():
         return current["step"]
+
+    def _denoiser_step_pre_hook(module_, inputs):
+        denoiser_call["idx"] += 1
+        current["step"] = int(denoiser_call["idx"])
+
+    step_tracker_handle = denoiser.register_forward_pre_hook(_denoiser_step_pre_hook)
     sample_root = ensure_dir(out_dir / "samples")
     total = len(prompts) * num_seeds * len(scales)
     progress.start(total=total, message="block ablation started", resolved_modules=resolved)
@@ -261,6 +314,8 @@ def _block_ablation(cfg: Dict[str, Any], progress, *, dry_run: bool = False):
             seed = seed_start + s
             for scale in scales:
                 sample_id = f"{safe_name(prompt_id)}_seed_{seed:04d}_scale_{scale:g}"
+                denoiser_call["idx"] = -1
+                current["step"] = -1
                 scaler = BlockOutputScaler(scale, step_getter=get_step, active_steps=target_steps)
                 handles = [modules[name].register_forward_hook(scaler) for name in resolved]
                 try:
@@ -273,7 +328,15 @@ def _block_ablation(cfg: Dict[str, Any], progress, *, dry_run: bool = False):
                 save_json(sample_dir / "metadata.json", meta)
                 rows.append(meta)
                 progress.update(message="block ablation generated", sample_id=sample_id)
-    report = {"status": "ok", "samples": len(rows), "kind": "transformer_block_ablation", "resolved_modules": resolved}
+    remove_hooks([step_tracker_handle])
+    report = {
+        "status": "ok",
+        "samples": len(rows),
+        "kind": "transformer_block_ablation",
+        "resolved_modules": resolved,
+        "target_steps": target_steps,
+        "scales": scales,
+    }
     save_json(out_dir / "intervention_rows.json", rows)
     save_json(out_dir / "report.json", report)
     progress.end(message="block ablation finished", samples=len(rows))

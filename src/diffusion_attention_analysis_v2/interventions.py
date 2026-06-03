@@ -145,7 +145,7 @@ class ResidualConceptSteerer:
                 return torch.ones((flat.shape[0], 1), device=flat.device, dtype=flat.dtype)
             signal = z[:, valid].float().amax(dim=-1).reshape(b, n)
             mask = torch.full((b, n), float(self.outside_scale), device=flat.device, dtype=flat.dtype)
-            if self.spatial_mode in {"top_frac", "active_top", "active_tokens"}:
+            if self.spatial_mode in {"top_frac", "active_top"}:
                 k = max(1, min(n, int(round(float(self.top_frac) * n))))
                 idx = torch.topk(signal, k=k, dim=1).indices
                 mask.scatter_(1, idx, 1.0)

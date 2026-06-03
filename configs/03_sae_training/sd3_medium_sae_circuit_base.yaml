@@ -1,0 +1,27 @@
+stage:
+  id: 03_sae_training_sd3_medium_sae_circuit_base
+  name: sae_training
+  description: "Base config for SD3 Medium Top-K SAE over one layer/timestep; notebook overrides layer, step and output_dir for early/mid/late SAEs."
+  claim_level: sd3_time_adaptive_sae_training
+  artifacts:
+    - sae.pt
+    - history.json
+    - report.json
+model:
+  name: sd3_medium
+  family: transformer
+  device: cuda
+data:
+  capture_dir: outputs/sd3_medium_sae_circuit_150/01_capture/captures
+  output_dir: outputs/sd3_medium_sae_circuit_150/03_sae/override_me
+sae:
+  layer: transformer_blocks.11
+  step: 13
+  expansion_factor: 2
+  k: 16
+  batch_size: 2048
+  learning_rate: 0.0001
+  weight_decay: 0.0
+  num_epochs: 1
+  max_activation_files: 150
+  max_tokens_per_file: 2048

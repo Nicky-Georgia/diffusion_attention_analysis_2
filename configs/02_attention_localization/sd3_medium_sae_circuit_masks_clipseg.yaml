@@ -1,0 +1,26 @@
+stage:
+  id: 02_masks_sd3_medium_sae_circuit_150
+  name: mask_generation
+  description: "CLIPSeg pseudo-masks for SD3 Medium-only SAE concept dictionaries."
+  claim_level: sd3_pseudomask_support
+  artifacts:
+    - '*/*.png'
+    - mask_manifest.csv
+    - report.json
+model:
+  name: sd3_medium
+  family: transformer
+  device: cuda
+data:
+  samples_dir: outputs/sd3_medium_sae_circuit_150/01_capture/samples
+  output_dir: annotations/sd3_medium_sae_circuit_150
+masking:
+  model_id: CIDAS/clipseg-rd64-refined
+  relative_threshold: 0.55
+  min_area_fraction: 0.002
+  max_area_fraction: 0.80
+  fallback_top_fraction: 0.12
+  save_soft_masks: false
+  save_previews: true
+  preview_max_samples: 24
+  force: false

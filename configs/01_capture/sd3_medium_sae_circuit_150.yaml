@@ -1,0 +1,63 @@
+stage:
+  id: 01_capture_sd3_medium_sae_circuit_150
+  name: capture
+  description: "SD3 Medium-only capture for time-adaptive SAE circuit experiments: full SD3 joint-attention probability maps plus selected image-token residual updates on early/mid/late denoising steps."
+  claim_level: sd3_time_adaptive_sae_circuit_capture
+  artifacts:
+    - samples/*/image.png
+    - samples/*/metadata.json
+    - captures/*/attention/step_*/transformer_blocks_*_attn_processor.pt
+    - captures/*/activations/step_*/transformer_blocks_*.pt
+    - report.json
+    - activation_missing.json
+    - attention_missing.json
+model:
+  name: sd3_medium
+  family: transformer
+  pipeline_class: sd3
+  model_id: stabilityai/stable-diffusion-3-medium-diffusers
+  dtype: float16
+  device: cuda
+  negative_prompt: ""
+generation:
+  height: 1024
+  width: 1024
+  guidance_scale: 7.0
+  num_inference_steps: 28
+  negative_prompt: ""
+data:
+  prompts_path: prompts/sd3_medium_sae_circuit_150.jsonl
+  max_prompts: 150
+  output_dir: outputs/sd3_medium_sae_circuit_150/01_capture
+capture:
+  step_indices: [0, 13, 27]
+  save_latents: false
+  track_step_on_denoiser_pre_hook: true
+  strict_activation_count: true
+  strict_attention_count: true
+  attention:
+    enabled: true
+    processor: sd3_joint
+    save_headwise: false
+    save_dtype: float16
+    row_chunk_size: 512
+    include_attn2: false
+    layer_whitelist:
+      - transformer_blocks.0.attn
+      - transformer_blocks.11.attn
+      - transformer_blocks.23.attn
+    artifact: "head-averaged full joint-attention probability maps [batch, image+text queries, image+text keys]; token order is image tokens followed by text/context tokens."
+  activation_modules:
+    - transformer_blocks.0
+    - transformer_blocks.11
+    - transformer_blocks.23
+runtime:
+  seed_start: 0
+  num_seeds: 1
+  enable_model_cpu_offload: true
+  torch_compile: false
+  enable_xformers_memory_efficient_attention: false
+resources:
+  preferred_filestore: container4
+  recommended_container4_gb: 220
+  artifact_choice: "full SD3 joint-attention probability maps for localization/circuit edges; image-token residual updates for SAE training and steering."
