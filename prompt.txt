@@ -1,0 +1,676 @@
+Да, для масштабирования с 16 до 75 samples я бы **не перезаписывал старый pilot-run**. Самый безопасный путь — сделать отдельный tagged run:
+
+```text
+outputs/sd15_75/...
+annotations/sd15_75/...
+prompts/sd15_75_prompts.jsonl
+```
+
+Тогда pilot `outputs/sd15/...` останется нетронутым, а вся новая серия будет лежать отдельно. Это минимизирует риск сломать файловую систему и старые результаты.
+
+Я просмотрел структуру repo/configs и твой notebook. Важные моменты:
+
+* `configs/01_capture/sd15_full.yaml` по умолчанию рассчитан на большой full-run: `max_prompts: 1000`, `num_seeds: 2`, `save_latents: true`, 3 activation modules и estimated storage 300 GB. Для 75 samples это надо обязательно переопределять. 
+* Stage 2 localization уже использует `annotations/sd15` в config, но для нового tagged run нужно заменить на `annotations/sd15_75`. 
+* Stage 3 обучает SAE на `mid_block.attentions.0`, `step=24`, что хорошо совпадает с нашими pilot-выводами. 
+* Stage 4 в config всё ещё имеет `annotations_dir: annotations`, поэтому для новой структуры обязательно нужен override на `annotations/sd15_75`. 
+* Override parser умеет читать списки через YAML-style значения, так что `capture.activation_modules=[mid_block.attentions.0]` и `metrics.steps=[0,24,49]` корректны. 
+
+Ниже — безопасный набор ячеек для вставки в текущий notebook.
+
+---
+
+## Важно: что НЕ запускать
+
+Не перезапускай destructive cells из notebook:
+
+```python
+# SD15 cleanup
+```
+
+и особенно:
+
+```python
+%rm -rf "$STORAGE/diffusion_attention_analysis_2/outputs/sd15/01_capture"
+%rm -rf /home/jupyter/project/diffusion_attention_analysis_2/outputs/sd15/01_capture
+```
+
+Для масштабирования на 75 samples они не нужны.
+
+Также не запускай старые финальные Stage 5 cells:
+
+```python
+run_config("configs/05_interventions/sd15_map_reweight.yaml", overrides=INTERVENTION_OVERRIDES)
+run_config("configs/05_interventions/sd15_sae_steering.yaml", overrides=INTERVENTION_OVERRIDES)
+```
+
+Мы будем использовать tagged output dirs.
+
+---
+
+# Cell A — define safe 75-sample run
+
+```python
+from pathlib import Path
+import os
+import subprocess
+
+PROJECT_ROOT = Path("/home/jupyter/project/diffusion_attention_analysis_2")
+STORAGE = Path("/home/jupyter/filestore/container2")
+
+assert PROJECT_ROOT.exists(), PROJECT_ROOT
+assert STORAGE.exists(), STORAGE
+
+RUN_TAG = "sd15_75"
+
+PROMPTS_75 = PROJECT_ROOT / "prompts/sd15_75_prompts.jsonl"
+
+CAPTURE75_DIR = PROJECT_ROOT / f"outputs/{RUN_TAG}/01_capture"
+MASK75_DIR = PROJECT_ROOT / f"annotations/{RUN_TAG}"
+LOC75_DIR = PROJECT_ROOT / f"outputs/{RUN_TAG}/02_attention_localization"
+SAE75_DIR = PROJECT_ROOT / f"outputs/{RUN_TAG}/03_sae_mid"
+CONCEPT75_DIR = PROJECT_ROOT / f"outputs/{RUN_TAG}/04_concept_dictionary"
+MAP75_DIR = PROJECT_ROOT / f"outputs/{RUN_TAG}/05_intervention_map_reweight"
+SAE_STEER75_DIR = PROJECT_ROOT / f"outputs/{RUN_TAG}/05_intervention_sae_steering"
+
+print("RUN_TAG:", RUN_TAG)
+print("PROJECT_ROOT:", PROJECT_ROOT)
+print("outputs resolved:", (PROJECT_ROOT / "outputs").resolve())
+print("annotations resolved:", (PROJECT_ROOT / "annotations").resolve())
+
+subprocess.run(["df", "-h", str(PROJECT_ROOT), str(STORAGE)])
+```
+
+---
+
+# Cell B — create 25 prompts × 3 seeds = 75 samples
+
+Текущий repo prompt file содержит только 8 prompts, поэтому `max_prompts=75` сам по себе не даст 75 samples. Безопаснее сделать отдельный prompt file: `25 prompts × 3 seeds`.
+
+```python
+import json
+from pathlib import Path
+
+prompts_25 = [
+    {"id": "s75_001_dog_grass", "prompt": "a photo of a dog on green grass", "entities": [{"label": "dog", "token": "dog"}, {"label": "grass", "token": "grass"}]},
+    {"id": "s75_002_car_street", "prompt": "a red car on a city street", "entities": [{"label": "car", "token": "car"}, {"label": "street", "token": "street"}]},
+    {"id": "s75_003_cat_chair", "prompt": "a cat sitting on a wooden chair", "entities": [{"label": "cat", "token": "cat"}, {"label": "chair", "token": "chair"}]},
+    {"id": "s75_004_dog_bicycle", "prompt": "a dog next to a bicycle", "entities": [{"label": "dog", "token": "dog"}, {"label": "bicycle", "token": "bicycle"}]},
+    {"id": "s75_005_cup_book", "prompt": "a cup to the left of a book", "entities": [{"label": "cup", "token": "cup"}, {"label": "book", "token": "book"}]},
+    {"id": "s75_006_vase_flowers", "prompt": "a blue vase with yellow flowers", "entities": [{"label": "vase", "token": "vase"}, {"label": "flowers", "token": "flowers"}]},
+    {"id": "s75_007_person_umbrella", "prompt": "a person holding an umbrella in the rain", "entities": [{"label": "person", "token": "person"}, {"label": "umbrella", "token": "umbrella"}]},
+    {"id": "s75_008_robot_newspaper_bench", "prompt": "a small robot reading a newspaper on a bench", "entities": [{"label": "robot", "token": "robot"}, {"label": "newspaper", "token": "newspaper"}, {"label": "bench", "token": "bench"}]},
+    {"id": "s75_009_car_tree", "prompt": "a red car parked beside a tree", "entities": [{"label": "car", "token": "car"}, {"label": "tree", "token": "tree"}]},
+    {"id": "s75_010_bicycle_tree", "prompt": "a bicycle leaning against a tree", "entities": [{"label": "bicycle", "token": "bicycle"}, {"label": "tree", "token": "tree"}]},
+    {"id": "s75_011_dog_bench", "prompt": "a dog sitting on a park bench", "entities": [{"label": "dog", "token": "dog"}, {"label": "bench", "token": "bench"}]},
+    {"id": "s75_012_cat_book", "prompt": "a cat lying next to an open book", "entities": [{"label": "cat", "token": "cat"}, {"label": "book", "token": "book"}]},
+    {"id": "s75_013_cup_table", "prompt": "a white cup on a wooden table", "entities": [{"label": "cup", "token": "cup"}, {"label": "table", "token": "table"}]},
+    {"id": "s75_014_flowers_grass", "prompt": "yellow flowers growing in green grass", "entities": [{"label": "flowers", "token": "flowers"}, {"label": "grass", "token": "grass"}]},
+    {"id": "s75_015_person_dog", "prompt": "a person walking a dog on the street", "entities": [{"label": "person", "token": "person"}, {"label": "dog", "token": "dog"}, {"label": "street", "token": "street"}]},
+    {"id": "s75_016_robot_cup", "prompt": "a robot holding a cup in a kitchen", "entities": [{"label": "robot", "token": "robot"}, {"label": "cup", "token": "cup"}]},
+    {"id": "s75_017_car_umbrella", "prompt": "a car near a person with an umbrella", "entities": [{"label": "car", "token": "car"}, {"label": "person", "token": "person"}, {"label": "umbrella", "token": "umbrella"}]},
+    {"id": "s75_018_vase_table", "prompt": "a ceramic vase on a small table", "entities": [{"label": "vase", "token": "vase"}, {"label": "table", "token": "table"}]},
+    {"id": "s75_019_book_chair", "prompt": "a book resting on a chair", "entities": [{"label": "book", "token": "book"}, {"label": "chair", "token": "chair"}]},
+    {"id": "s75_020_cat_grass", "prompt": "a cat sitting on grass near flowers", "entities": [{"label": "cat", "token": "cat"}, {"label": "grass", "token": "grass"}, {"label": "flowers", "token": "flowers"}]},
+    {"id": "s75_021_bicycle_street", "prompt": "a bicycle on a quiet city street", "entities": [{"label": "bicycle", "token": "bicycle"}, {"label": "street", "token": "street"}]},
+    {"id": "s75_022_dog_tree", "prompt": "a dog standing under a tree", "entities": [{"label": "dog", "token": "dog"}, {"label": "tree", "token": "tree"}]},
+    {"id": "s75_023_newspaper_bench", "prompt": "a newspaper lying on a bench", "entities": [{"label": "newspaper", "token": "newspaper"}, {"label": "bench", "token": "bench"}]},
+    {"id": "s75_024_cup_flowers", "prompt": "a cup beside a vase of flowers", "entities": [{"label": "cup", "token": "cup"}, {"label": "vase", "token": "vase"}, {"label": "flowers", "token": "flowers"}]},
+    {"id": "s75_025_person_chair", "prompt": "a person sitting on a chair", "entities": [{"label": "person", "token": "person"}, {"label": "chair", "token": "chair"}]},
+]
+
+PROMPTS_75.parent.mkdir(parents=True, exist_ok=True)
+
+if PROMPTS_75.exists():
+    print("Prompt file already exists, not overwriting:", PROMPTS_75)
+else:
+    with PROMPTS_75.open("w", encoding="utf-8") as f:
+        for row in prompts_25:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    print("Wrote:", PROMPTS_75)
+
+print("Prompts:", sum(1 for _ in PROMPTS_75.open("r", encoding="utf-8")))
+```
+
+---
+
+# Stage 1 — capture 75 samples safely
+
+Главное отличие от pilot: мы сохраняем attention и **только mid activation**, потому что Stage 3/4 используют `mid_block.attentions.0`, `step=24`. Latents отключаем, чтобы не расходовать storage.
+
+```python
+CAPTURE75_OVERRIDES = [
+    f"data.prompts_path={PROMPTS_75}",
+    f"data.output_dir={CAPTURE75_DIR}",
+    "data.max_prompts=25",
+    "runtime.seed_start=0",
+    "runtime.num_seeds=3",
+
+    # Storage-safe: latents are not needed for Stages 2–4.
+    "capture.save_latents=false",
+
+    # Stage 3/4 use only mid_block.attentions.0.
+    "capture.activation_modules=[mid_block.attentions.0]",
+]
+
+run_config(
+    "configs/01_capture/sd15_full.yaml",
+    overrides=CAPTURE75_OVERRIDES,
+    dry_run=True,
+)
+```
+
+Если dry-run выглядит нормально:
+
+```python
+run_config(
+    "configs/01_capture/sd15_full.yaml",
+    overrides=CAPTURE75_OVERRIDES,
+)
+
+show_report(f"outputs/{RUN_TAG}/01_capture/report.json")
+```
+
+Проверка:
+
+```python
+import json
+from pathlib import Path
+
+report = json.loads((CAPTURE75_DIR / "report.json").read_text())
+print(report)
+
+assert report["status"] == "ok"
+assert report["samples"] == 75, report["samples"]
+```
+
+---
+
+# Stage 1 check — ensure activations and attention exist
+
+```python
+from pathlib import Path
+import pandas as pd
+from IPython.display import display
+
+capture_dir = CAPTURE75_DIR / "captures"
+
+sample_dirs = sorted((CAPTURE75_DIR / "samples").glob("*"))
+attention_files = sorted(capture_dir.glob("*/attention/step_*/*.pt"))
+activation_files = sorted(capture_dir.glob("*/activations/step_*/*.pt"))
+
+print("Samples:", len(sample_dirs))
+print("Attention files:", len(attention_files))
+print("Activation files:", len(activation_files))
+
+act_rows = []
+for p in activation_files:
+    act_rows.append({
+        "sample_id": p.parents[2].name,
+        "step": int(p.parent.name.split("_")[-1]),
+        "module_file": p.name,
+        "size_mb": p.stat().st_size / 1024**2,
+    })
+
+act_df = pd.DataFrame(act_rows)
+display(act_df.groupby(["step", "module_file"]).agg(files=("sample_id", "count"), size_mb=("size_mb", "sum")).reset_index())
+
+assert len(sample_dirs) == 75
+assert len(activation_files) > 0
+assert len(attention_files) > 0
+```
+
+---
+
+# Stage 2a — generate masks for 75 samples
+
+Для нового tagged run используем `annotations/sd15_75`.
+
+```python
+MASK75_OVERRIDES = [
+    f"data.samples_dir={CAPTURE75_DIR / 'samples'}",
+    f"data.output_dir={MASK75_DIR}",
+
+    # First full 75 run. Keep false unless you need to recompute all masks.
+    "masking.force=false",
+
+    "masking.max_samples=75",
+    "masking.preview_max_samples=24",
+]
+
+run_config(
+    "configs/02_attention_localization/sd15_generate_masks_clipseg.yaml",
+    overrides=MASK75_OVERRIDES,
+    dry_run=True,
+)
+```
+
+Run:
+
+```python
+run_config(
+    "configs/02_attention_localization/sd15_generate_masks_clipseg.yaml",
+    overrides=MASK75_OVERRIDES,
+)
+
+show_report(f"annotations/{RUN_TAG}/report.json")
+```
+
+Inspect:
+
+```python
+import pandas as pd
+from IPython.display import display
+
+mask_df = pd.read_csv(MASK75_DIR / "mask_manifest.csv")
+
+display(mask_df.head(30))
+print("Rows:", len(mask_df))
+print("Samples with masks:", mask_df["sample_id"].nunique())
+print("Mean coverage:", mask_df["coverage"].mean())
+
+if "error" in mask_df.columns:
+    errors = mask_df[mask_df["error"].notna()]
+    print("Errors:", len(errors))
+    if len(errors):
+        display(errors.head(20))
+
+display(mask_df.groupby("label")["coverage"].describe().sort_values("mean"))
+```
+
+---
+
+# Stage 2b — localization on 75 samples
+
+```python
+capture_dir = CAPTURE75_DIR / "captures"
+
+AVAILABLE_STEPS = sorted({
+    int(p.parent.name.split("_")[-1])
+    for p in capture_dir.glob("*/attention/step_*/*.pt")
+})
+
+REQUESTED_STEPS = [0, 24, 49]
+USABLE_STEPS = [s for s in REQUESTED_STEPS if s in AVAILABLE_STEPS]
+
+print("Available attention steps:", AVAILABLE_STEPS)
+print("Usable Stage-2 steps:", USABLE_STEPS)
+
+assert USABLE_STEPS, "No requested attention steps available."
+
+STAGE2_75_OVERRIDES = [
+    f"data.capture_dir={CAPTURE75_DIR / 'captures'}",
+    f"data.annotations_dir={MASK75_DIR}",
+    f"data.output_dir={LOC75_DIR}",
+    f"metrics.steps={USABLE_STEPS}",
+]
+```
+
+Dry-run and run:
+
+```python
+run_config(
+    "configs/02_attention_localization/sd15_full.yaml",
+    overrides=STAGE2_75_OVERRIDES,
+    dry_run=True,
+)
+```
+
+```python
+run_config(
+    "configs/02_attention_localization/sd15_full.yaml",
+    overrides=STAGE2_75_OVERRIDES,
+)
+
+show_report(f"outputs/{RUN_TAG}/02_attention_localization/report.json")
+```
+
+Inspect:
+
+```python
+loc_df = pd.read_csv(LOC75_DIR / "attention_localization_rows.csv")
+
+print("Localization rows:", len(loc_df))
+display(loc_df.head(30))
+
+display(
+    loc_df.groupby("step")
+    .agg(
+        n=("iou", "count"),
+        iou_mean=("iou", "mean"),
+        iou_std=("iou", "std"),
+        centroid_mean=("centroid_distance", "mean"),
+        entropy_mean=("entropy", "mean"),
+    )
+    .reset_index()
+)
+
+display(
+    loc_df.groupby("label")
+    .agg(
+        n=("iou", "count"),
+        iou_mean=("iou", "mean"),
+        centroid_mean=("centroid_distance", "mean"),
+        entropy_mean=("entropy", "mean"),
+    )
+    .sort_values("iou_mean", ascending=False)
+    .reset_index()
+)
+```
+
+---
+
+# Stage 3 — SAE training on 75 activation files
+
+Для 75 samples это уже не просто smoke, но ещё не final thesis-scale. Я бы поставил 5 epochs.
+
+```python
+SAE75_OVERRIDES = [
+    f"data.capture_dir={CAPTURE75_DIR / 'captures'}",
+    f"data.output_dir={SAE75_DIR}",
+
+    "sae.layer=mid_block.attentions.0",
+    "sae.step=24",
+    "sae.num_epochs=5",
+    "sae.max_activation_files=75",
+    "sae.max_tokens_per_file=4096",
+    "sae.batch_size=4096",
+    "sae.learning_rate=0.0001",
+]
+```
+
+Dry-run:
+
+```python
+run_config(
+    "configs/03_sae_training/sd15_full.yaml",
+    overrides=SAE75_OVERRIDES,
+    dry_run=True,
+)
+```
+
+Run:
+
+```python
+run_config(
+    "configs/03_sae_training/sd15_full.yaml",
+    overrides=SAE75_OVERRIDES,
+)
+
+show_report(f"outputs/{RUN_TAG}/03_sae_mid/report.json")
+```
+
+Inspect:
+
+```python
+import json
+import pandas as pd
+from IPython.display import display
+
+history = json.loads((SAE75_DIR / "history.json").read_text())["history"]
+hist_df = pd.DataFrame(history)
+
+display(hist_df)
+
+report = json.loads((SAE75_DIR / "report.json").read_text())
+print("Activation files:", report["metadata"]["activation_files"])
+print("d_model:", report["metadata"]["d_model"])
+print("checkpoint:", report["checkpoint"])
+```
+
+Expected:
+
+```text
+activation_files = 75
+loss decreases across epochs
+active_fraction ≈ 20 / 5120 = 0.00390625
+```
+
+---
+
+# Stage 4 — concept dictionary on 75 samples
+
+```python
+STAGE4_75_OVERRIDES = [
+    f"data.capture_dir={CAPTURE75_DIR / 'captures'}",
+    f"data.annotations_dir={MASK75_DIR}",
+    f"data.sae_checkpoint={SAE75_DIR / 'sae.pt'}",
+    f"data.output_dir={CONCEPT75_DIR}",
+
+    "dictionary.layer=mid_block.attentions.0",
+    "dictionary.step=24",
+    "dictionary.max_activation_files=75",
+    "dictionary.top_k_features_per_label=15",
+]
+```
+
+Dry-run:
+
+```python
+run_config(
+    "configs/04_concept_dictionary/sd15_full.yaml",
+    overrides=STAGE4_75_OVERRIDES,
+    dry_run=True,
+)
+```
+
+Run:
+
+```python
+run_config(
+    "configs/04_concept_dictionary/sd15_full.yaml",
+    overrides=STAGE4_75_OVERRIDES,
+)
+
+show_report(f"outputs/{RUN_TAG}/04_concept_dictionary/report.json")
+```
+
+Inspect:
+
+```python
+concept_df = pd.read_csv(CONCEPT75_DIR / "concept_dictionary.csv")
+
+print("Rows:", len(concept_df))
+print("Labels:", concept_df["label"].nunique())
+
+display(concept_df.head(40))
+
+label_summary = (
+    concept_df.groupby("label")
+    .agg(
+        count=("count", "first"),
+        top_score=("score", "max"),
+        mean_top_score=("score", "mean"),
+        n_features=("feature_id", "count"),
+    )
+    .sort_values("top_score", ascending=False)
+)
+
+display(label_summary)
+```
+
+Совмещаем Stage 2 и Stage 4:
+
+```python
+loc_label = (
+    loc_df.groupby("label")
+    .agg(
+        loc_n=("iou", "count"),
+        iou_mean=("iou", "mean"),
+        centroid_mean=("centroid_distance", "mean"),
+        entropy_mean=("entropy", "mean"),
+    )
+    .reset_index()
+)
+
+concept_label = (
+    concept_df.groupby("label")
+    .agg(
+        concept_count=("count", "first"),
+        top_score=("score", "max"),
+        mean_top_score=("score", "mean"),
+        n_features=("feature_id", "count"),
+    )
+    .reset_index()
+)
+
+joint75 = (
+    concept_label
+    .merge(loc_label, on="label", how="left")
+    .sort_values(["iou_mean", "top_score"], ascending=False)
+)
+
+display(joint75)
+```
+
+---
+
+# Stage 5 — scaled, but not 75-sample-sized
+
+Stage 5 не нужно масштабировать линейно до 75 images. Это causal probe: лучше меньше, но контролируемо.
+
+Для 75-sample run я бы сделал:
+
+* map reweight: `4 prompts × 2 seeds × 3 strengths = 24 images`;
+* SAE steering: `4 prompts × 2 seeds × 4 betas = 32 images`;
+* concept IDs выбирать из нового `outputs/sd15_75/04_concept_dictionary`.
+
+```python
+PILOT_LABELS_FOR_INTERVENTION = ["dog", "car", "cat", "vase", "flowers", "book"]
+
+selected_features75 = (
+    concept_df[concept_df["label"].isin(PILOT_LABELS_FOR_INTERVENTION)]
+    .sort_values(["label", "score"], ascending=[True, False])
+    .groupby("label")
+    .head(1)
+    .copy()
+)
+
+display(selected_features75)
+
+CONCEPT_IDS_75 = sorted(selected_features75["feature_id"].astype(int).unique().tolist())
+print("CONCEPT_IDS_75:", CONCEPT_IDS_75)
+
+assert CONCEPT_IDS_75, "No concept IDs selected."
+```
+
+## Stage 5A — map reweight
+
+```python
+MAP75_OVERRIDES = [
+    f"data.output_dir={MAP75_DIR}",
+    "data.max_prompts=4",
+    "runtime.num_seeds=2",
+
+    "intervention.strengths=[1.0,2.0,4.0]",
+    "intervention.target_steps=[24]",
+]
+```
+
+```python
+run_config(
+    "configs/05_interventions/sd15_map_reweight.yaml",
+    overrides=MAP75_OVERRIDES,
+    dry_run=True,
+)
+```
+
+```python
+run_config(
+    "configs/05_interventions/sd15_map_reweight.yaml",
+    overrides=MAP75_OVERRIDES,
+)
+
+show_report(f"outputs/{RUN_TAG}/05_intervention_map_reweight/report.json")
+```
+
+## Stage 5B — SAE steering
+
+```python
+SAE_STEER75_OVERRIDES = [
+    f"data.sae_checkpoint={SAE75_DIR / 'sae.pt'}",
+    f"data.output_dir={SAE_STEER75_DIR}",
+    "data.max_prompts=4",
+    "runtime.num_seeds=2",
+
+    "intervention.module=mid_block.attentions.0",
+    "intervention.target_steps=[24]",
+    f"intervention.concept_ids={CONCEPT_IDS_75}",
+
+    # 0.0 = SAE reconstruction control, not true original baseline.
+    "intervention.betas=[0.0,1.0,-1.0,2.0]",
+]
+```
+
+```python
+run_config(
+    "configs/05_interventions/sd15_sae_steering.yaml",
+    overrides=SAE_STEER75_OVERRIDES,
+    dry_run=True,
+)
+```
+
+```python
+run_config(
+    "configs/05_interventions/sd15_sae_steering.yaml",
+    overrides=SAE_STEER75_OVERRIDES,
+)
+
+show_report(f"outputs/{RUN_TAG}/05_intervention_sae_steering/report.json")
+```
+
+---
+
+# Что считать успешным масштабированием
+
+После 75-sample SD1.5 run должно быть:
+
+```text
+Stage 1:
+  outputs/sd15_75/01_capture/report.json
+  samples = 75
+  activations exist for mid_block.attentions.0 step 24
+  attention exists for steps 0, 24, 49
+
+Stage 2a:
+  annotations/sd15_75/report.json
+  mask_manifest.csv exists
+  masks for most/all generated samples
+
+Stage 2b:
+  outputs/sd15_75/02_attention_localization/attention_localization_rows.csv
+  rows > pilot rows
+  skipped missing_annotation/missing_token not dominant
+
+Stage 3:
+  outputs/sd15_75/03_sae_mid/sae.pt
+  activation_files = 75
+  loss decreases
+
+Stage 4:
+  outputs/sd15_75/04_concept_dictionary/concept_dictionary.csv
+  labels > pilot labels or at least larger counts
+  top_score positive
+  count per label increased
+
+Stage 5:
+  outputs/sd15_75/05_intervention_map_reweight/report.json
+  outputs/sd15_75/05_intervention_sae_steering/report.json
+```
+
+---
+
+# Главная логика масштабирования
+
+Для SD1.5 сейчас лучше так:
+
+```text
+Stage 1: 75 generated samples, save attention + only mid activation, no latents
+Stage 2 masks: all 75 samples
+Stage 2 localization: all available attention steps
+Stage 3 SAE: all 75 mid activations, 5 epochs
+Stage 4 dictionary: all 75 activations/masks, top-15 features per label
+Stage 5 interventions: controlled subset, not all 75 samples
+```
+
+Так мы масштабируем эксперимент, но не ломаем старый pilot и не раздуваем storage. После успешного `sd15_75` можно будет перейти к transformer models уже с тем же принципом: отдельный `RUN_TAG`, отдельные output dirs, не перезаписывать pilot artifacts.

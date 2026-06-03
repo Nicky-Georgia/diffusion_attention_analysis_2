@@ -25,8 +25,8 @@ def run(cfg: Dict[str, Any], progress, *, dry_run: bool = False) -> Dict[str, An
 
     logic = {
         "question": "Which SAE features align with object masks?",
-        "control": "features are ranked by inside-vs-outside activation contrast, not cherry-picked images",
-        "scope": "main for SD1.5/SDXL; disabled for transformer pilots in default configs",
+        "control": "Features are ranked by inside-vs-outside activation contrast, not cherry-picked images.",
+        "scope": "Supports U-Net spatial maps and SD3 image-token grids when the activation shape is square.",
     }
     if dry_run:
         return dry_run_response(cfg, progress, logic_check=logic)
