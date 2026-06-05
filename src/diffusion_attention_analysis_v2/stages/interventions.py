@@ -182,6 +182,7 @@ def _sae_steering(cfg: Dict[str, Any], progress, *, dry_run: bool = False):
         "outside_scale": "SD3_SAE_OUTSIDE_SCALE",
         "normalize_direction": "SD3_SAE_NORMALIZE_DIRECTION",
         "beta_scale_mode": "SD3_SAE_BETA_SCALE_MODE",
+        "max_delta_rms_ratio": "SD3_SAE_MAX_DELTA_RMS_RATIO",
     }
     for cfg_key, env_key in steerer_env.items():
         if cfg_key in int_cfg and int_cfg[cfg_key] is not None:

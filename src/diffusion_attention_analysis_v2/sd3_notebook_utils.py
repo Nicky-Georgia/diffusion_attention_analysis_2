@@ -67,24 +67,52 @@ def _safe_backup_path(path: Path) -> Path:
     return path.with_name(path.name + f".project_backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}")
 
 
+def _ensure_directory_or_backup(path: Path) -> None:
+    """Ensure path is a directory; move legacy placeholder files away safely.
+
+    Some DataSphere project archives contain small files named outputs or
+    annotations with an old filestore path inside. pathlib.mkdir(...,
+    exist_ok=True) still raises FileExistsError for such files, so we back
+    them up before creating the directory used as a symlink parent.
+    """
+
+    if path.is_dir():
+        return
+    if path.exists() or path.is_symlink():
+        backup_dir = path.parent / ".path_placeholders_backup"
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup = backup_dir / f"{path.name}.{stamp}"
+        path.rename(backup)
+    path.mkdir(parents=True, exist_ok=True)
+
+
 def ensure_symlink(link_path: Path, target_path: Path) -> None:
-    link_path.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_directory_or_backup(link_path.parent)
     target_path.mkdir(parents=True, exist_ok=True)
     if link_path.is_symlink():
-        if link_path.resolve() != target_path.resolve():
+        try:
+            same_target = link_path.resolve(strict=True) == target_path.resolve(strict=True)
+        except FileNotFoundError:
+            same_target = False
+        if not same_target:
             link_path.unlink()
             link_path.symlink_to(target_path, target_is_directory=True)
         return
     if link_path.exists():
         if not link_path.is_dir():
-            raise RuntimeError(f"{link_path} exists and is not a directory")
-        backup = _safe_backup_path(link_path)
-        if any(link_path.iterdir()):
-            if shutil.which("rsync"):
-                subprocess.run(["rsync", "-a", f"{link_path}/", f"{target_path}/"], check=True)
-            else:
-                shutil.copytree(link_path, target_path, dirs_exist_ok=True)
-        link_path.rename(backup)
+            backup_dir = link_path.parent / ".path_placeholders_backup"
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            backup = backup_dir / f"{link_path.name}.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            link_path.rename(backup)
+        else:
+            backup = _safe_backup_path(link_path)
+            if any(link_path.iterdir()):
+                if shutil.which("rsync"):
+                    subprocess.run(["rsync", "-a", f"{link_path}/", f"{target_path}/"], check=True)
+                else:
+                    shutil.copytree(link_path, target_path, dirs_exist_ok=True)
+            link_path.rename(backup)
     link_path.symlink_to(target_path, target_is_directory=True)
 
 

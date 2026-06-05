@@ -95,6 +95,7 @@ class ResidualConceptSteerer:
         self.outside_scale = float(_os.environ.get("SD3_SAE_OUTSIDE_SCALE", "0.0"))
         self.normalize_direction = _os.environ.get("SD3_SAE_NORMALIZE_DIRECTION", "none").strip().lower()
         self.beta_scale_mode = _os.environ.get("SD3_SAE_BETA_SCALE_MODE", "constant").strip().lower()
+        self.max_delta_rms_ratio = float(_os.environ.get("SD3_SAE_MAX_DELTA_RMS_RATIO", "0.0"))
 
     def _valid_ids(self, max_dim: int) -> list[int]:
         return [i for i in self.concept_ids if 0 <= int(i) < int(max_dim)]
@@ -191,6 +192,13 @@ class ResidualConceptSteerer:
                 delta = self.beta * direction.expand_as(flat)
             delta = delta * self._active_token_mask(flat, shape)
             delta = delta * self._branch_mask(shape, flat)
+
+            if self.max_delta_rms_ratio > 0:
+                base_rms = flat.pow(2).mean(dim=-1, keepdim=True).sqrt().clamp_min(1e-6)
+                delta_rms = delta.pow(2).mean(dim=-1, keepdim=True).sqrt().clamp_min(1e-6)
+                scale = (self.max_delta_rms_ratio * base_rms / delta_rms).clamp(max=1.0)
+                delta = delta * scale
+
             steered_flat = flat + delta
         steered = unflatten_feature_map(steered_flat, shape, like=x_out)
         new_tensor = x_in + steered if residual_mode else steered
