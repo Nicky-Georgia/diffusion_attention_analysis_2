@@ -1,0 +1,110 @@
+stage:
+  id: 06_sd3_medium_sae_causal_faithfulness
+  name: causal_analysis
+  description: "Counterfactual activation-patching protocol for causal faithfulness of SD3 Medium SAE features."
+  claim_level: sd3_sae_interventional_mediation_and_faithfulness
+  artifacts:
+    - prompt_pairs.jsonl
+    - feature_selection.csv
+    - run_manifest.csv
+    - semantic_scores.csv
+    - causal_estimands.csv
+    - causal_summary.csv
+    - figures/*.png
+    - galleries/*.png
+
+model:
+  name: sd3_medium
+  family: transformer
+  pipeline_class: sd3
+  model_id: stabilityai/stable-diffusion-3-medium-diffusers
+  dtype: float16
+  device: cuda
+  negative_prompt: ""
+
+generation:
+  height: 1024
+  width: 1024
+  guidance_scale: 7.0
+  num_inference_steps: 28
+  negative_prompt: ""
+
+data:
+  prompts_path: prompts/sd3_medium_sae_circuit_150.jsonl
+  capture_dir: outputs/sd3_medium_sae_circuit_150/01_capture/captures
+  baseline_samples_dir: outputs/sd3_medium_sae_circuit_150/01_capture/samples
+  existing_steering_analysis_dir: outputs/sd3_medium_sae_circuit_150/05_interventions/sae_steering_recommended_v2/_analysis
+  output_dir: outputs/sd3_medium_sae_circuit_150/06_causal_faithfulness
+
+sites:
+  early:
+    enabled: true
+    module: transformer_blocks.0
+    step: 0
+    sae_checkpoint: outputs/sd3_medium_sae_circuit_150/03_sae/early_block0_step0/sae.pt
+    concept_dictionary: outputs/sd3_medium_sae_circuit_150/04_concept_dictionary/early_block0_step0/concept_dictionary.csv
+  mid:
+    enabled: true
+    module: transformer_blocks.11
+    step: 13
+    sae_checkpoint: outputs/sd3_medium_sae_circuit_150/03_sae/mid_block11_step13/sae.pt
+    concept_dictionary: outputs/sd3_medium_sae_circuit_150/04_concept_dictionary/mid_block11_step13/concept_dictionary.csv
+  late:
+    enabled: true
+    module: transformer_blocks.23
+    step: 27
+    sae_checkpoint: outputs/sd3_medium_sae_circuit_150/03_sae/late_block23_step27/sae.pt
+    concept_dictionary: outputs/sd3_medium_sae_circuit_150/04_concept_dictionary/late_block23_step27/concept_dictionary.csv
+
+design:
+  target_labels: [dog, cat, car, book, bicycle, person]
+  prompts_per_label: 2
+  seed: 0
+  replacement_pool: [apple, chair, lamp, boat, horse, flower, umbrella, window]
+  arms:
+    - destination_clean
+    - destination_full_residual_patch
+    - destination_target_feature_patch
+    - destination_matched_control_patch
+    - source_target_feature_ablation
+  reuse_existing_source_images: true
+  skip_existing_outputs: true
+  pilot_only: true
+
+feature_selection:
+  features_per_label: 2
+  max_reuse: 8
+  fallback_max_reuse: 12
+  min_score: 0.0
+  control_match:
+    match_decoder_norm: true
+    max_reuse_delta: 4
+    exclude_target_label_features: true
+
+patching:
+  branch_mode: cond
+  target_spatial_mode: source_active_quantile
+  source_active_quantile: 0.95
+  outside_scale: 0.0
+  full_residual_spatial_mode: all
+  max_patch_rms_ratio: 0.25
+  ablation_max_delta_rms_ratio: 0.25
+  exact_sae_delta: true
+  use_source_feature_values: true
+
+evaluation:
+  semantic_model_id: CIDAS/clipseg-rd64-refined
+  semantic_device: cuda
+  score_top_fraction: 0.05
+  mask_threshold: 0.50
+  off_target_mode: prompt_entities_and_replacement
+  image_metric_size: 256
+  bootstrap_resamples: 2000
+  permutation_resamples: 10000
+  min_total_effect: 0.02
+  epsilon: 1.0e-6
+
+runtime:
+  enable_model_cpu_offload: true
+  enable_xformers_memory_efficient_attention: false
+  force_rerun: false
