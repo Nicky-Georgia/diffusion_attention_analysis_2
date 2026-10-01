@@ -131,3 +131,14 @@ Possible result profiles are deliberately separated:
 - **full residual weak:** move to another block/window or multi-block path patching instead of making an SAE-faithfulness claim.
 
 This validation target is different from TIDE-style reconstruction/interpretability/editing evidence: the central object is held-out counterfactual mediation and decomposition of the recoverable residual causal effect.
+
+
+## Added validation: SAE fidelity across the temporal window
+
+The early and middle SAEs are time-specific models trained at anchor steps 0 and 13. Reusing them over steps 0–4 and 11–15 is deliberate because it matches the temporal steering setup, but it introduces a possible distribution-shift confound. Before interpreting a weak window-level SAE mediation effect, the notebook therefore reports reconstruction cosine similarity, normalized RMSE, and active fraction at every step of the intervention window.
+
+This diagnostic does not gate the full-residual H1 test, which is independent of the SAE. It qualifies H2–H4: if reconstruction fidelity collapses away from the anchor, a weak SAE-window effect can reflect temporal SAE mismatch rather than absence of a sparse causal mediator. In that case a temporal-aware SAE/TIDE-style representation becomes a follow-up hypothesis instead of being silently conflated with causal failure.
+
+## Primary evaluator separation
+
+Grounding DINO is the primary held-out semantic evaluator. CLIPSeg is used for discovery masks and as a secondary outcome only. This separation prevents the same vision model from both selecting sparse features and supplying the main causal endpoint. Target evidence and replacement evidence are retained separately so that apparent target recovery can be distinguished from simple destruction of the counterfactual replacement.
