@@ -7,6 +7,9 @@ stage:
     - split_manifest.csv
     - feature_discovery.csv
     - selected_features.csv
+    - selected_features.json
+    - control_matching.csv
+    - sae_window_reconstruction_diagnostics.csv
     - clean_capture_manifest.csv
     - phase_a_manifest.csv
     - phase_a_scores.csv
@@ -80,6 +83,7 @@ feature_discovery:
   mask_top_fraction: 0.20
   min_sign_consistency: 0.66
   min_spatial_contrast: 0.0
+  project_effect_by_decoder_norm: true
   counterfactual_features: 4
   broad_counterfactual_features: 8
   dictionary_features: 4
@@ -126,6 +130,7 @@ evaluation:
   min_total_effect: 0.05
   full_positive_control_min_effect: 0.02
   full_positive_control_min_recovery: 0.10
+  min_valid_pairs_per_site: 4
 
 statistics:
   bootstrap_resamples: 4000
