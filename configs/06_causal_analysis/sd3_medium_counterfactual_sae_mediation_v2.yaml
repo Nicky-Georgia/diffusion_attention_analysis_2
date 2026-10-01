@@ -1,0 +1,147 @@
+stage:
+  id: 06_sd3_medium_counterfactual_sae_mediation_v2
+  name: causal_analysis
+  description: "Held-out counterfactual feature discovery plus temporal activation patching for causal mediation in SD3 Medium."
+  claim_level: sd3_sae_temporal_causal_mediation
+  artifacts:
+    - split_manifest.csv
+    - feature_discovery.csv
+    - selected_features.csv
+    - clean_capture_manifest.csv
+    - phase_a_manifest.csv
+    - phase_a_scores.csv
+    - phase_a_estimands.csv
+    - site_gates.csv
+    - phase_b_manifest.csv
+    - final_scores.csv
+    - final_estimands.csv
+    - primary_tests.csv
+    - figures/*.png
+    - galleries/*.png
+
+model:
+  name: sd3_medium
+  family: transformer
+  pipeline_class: sd3
+  model_id: stabilityai/stable-diffusion-3-medium-diffusers
+  dtype: float16
+  device: cuda
+  negative_prompt: ""
+
+generation:
+  height: 1024
+  width: 1024
+  guidance_scale: 7.0
+  num_inference_steps: 28
+  negative_prompt: ""
+
+data:
+  prompts_path: prompts/sd3_medium_sae_circuit_150.jsonl
+  output_dir: outputs/sd3_medium_sae_circuit_150/06_causal_mediation_v2
+
+sites:
+  early:
+    enabled: true
+    module: transformer_blocks.0
+    anchor_step: 0
+    window_steps: [0, 1, 2, 3, 4]
+    sae_checkpoint: outputs/sd3_medium_sae_circuit_150/03_sae/early_block0_step0/sae.pt
+    concept_dictionary: outputs/sd3_medium_sae_circuit_150/04_concept_dictionary/early_block0_step0/concept_dictionary.csv
+  mid:
+    enabled: true
+    module: transformer_blocks.11
+    anchor_step: 13
+    window_steps: [11, 12, 13, 14, 15]
+    sae_checkpoint: outputs/sd3_medium_sae_circuit_150/03_sae/mid_block11_step13/sae.pt
+    concept_dictionary: outputs/sd3_medium_sae_circuit_150/04_concept_dictionary/mid_block11_step13/concept_dictionary.csv
+  late:
+    enabled: false
+    module: transformer_blocks.23
+    anchor_step: 27
+    window_steps: [23, 24, 25, 26, 27]
+    sae_checkpoint: outputs/sd3_medium_sae_circuit_150/03_sae/late_block23_step27/sae.pt
+    concept_dictionary: outputs/sd3_medium_sae_circuit_150/04_concept_dictionary/late_block23_step27/concept_dictionary.csv
+
+design:
+  target_labels: [dog, cat, car, book, bicycle, person]
+  discovery_prompts_per_label: 3
+  evaluation_prompts_per_label: 2
+  confirmatory_prompts_per_label: 2
+  split_seed: 2601
+  replacement_pool: [apple, chair, lamp, boat, horse, flower, umbrella, window, banana, bed]
+  discovery_seed: 0
+  evaluation_seeds: [0]
+  confirmatory_seeds: [0, 1, 2]
+  run_confirmatory: false
+
+feature_discovery:
+  mask_model_id: CIDAS/clipseg-rd64-refined
+  mask_threshold: 0.50
+  mask_top_fraction: 0.20
+  min_sign_consistency: 0.66
+  min_spatial_contrast: 0.0
+  counterfactual_features: 4
+  broad_counterfactual_features: 8
+  dictionary_features: 4
+  dictionary_max_reuse: 8
+  dictionary_min_score: 0.0
+  encode_batch_size: 512
+
+controls:
+  candidate_pool_size: 512
+  max_reuse: 12
+  decoder_norm_weight: 1.0
+  patch_energy_weight: 2.0
+  reuse_weight: 0.15
+
+patching:
+  branch_mode: cond
+  cache_dtype: float16
+  exact_full_residual: true
+  max_delta_rms_ratio: 0.0
+  phase_a_arms:
+    - destination_full_anchor
+    - destination_full_window
+    - destination_cf_anchor
+    - destination_cf_window
+    - destination_dictionary_window
+    - destination_matched_control_window
+    - source_cf_reverse_window
+  phase_b_arms:
+    - destination_cf_broad_window
+    - destination_all_sae_window
+    - destination_reconstruction_error_window
+    - destination_non_cf_sae_window
+    - destination_cf_spatial_permutation_window
+    - destination_energy_matched_steer_window
+
+evaluation:
+  primary_model_id: IDEA-Research/grounding-dino-tiny
+  primary_threshold: 0.05
+  secondary_model_id: CIDAS/clipseg-rd64-refined
+  secondary_top_fraction: 0.05
+  secondary_mask_threshold: 0.50
+  image_metric_size: 256
+  min_source_primary_score: 0.15
+  min_total_effect: 0.05
+  full_positive_control_min_effect: 0.02
+  full_positive_control_min_recovery: 0.10
+
+statistics:
+  bootstrap_resamples: 4000
+  permutation_resamples: 20000
+  multiple_testing: holm
+  seed: 2601
+
+runtime:
+  enable_model_cpu_offload: true
+  force_rerun_clean: false
+  force_rerun_phase_a: false
+  force_rerun_phase_b: false
+  run_clean_capture: true
+  run_feature_discovery: true
+  run_phase_a: true
+  run_phase_a_scoring: true
+  run_phase_b_if_gate_passes: true
+  run_final_scoring: true
+  cleanup_discovery_caches_after_feature_selection: false
