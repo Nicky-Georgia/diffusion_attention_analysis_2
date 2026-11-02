@@ -424,7 +424,10 @@ def run_campaign(cfg, manifest, *, output, reference_roots, checkpoint, discover
         (output/"primary_inference.json").write_text(json.dumps(primary, indent=2))
         return summary, primary
     finally:
-        del model, pipe
+        if "model" in locals():
+            del model
+        if "pipe" in locals():
+            del pipe
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
