@@ -340,6 +340,9 @@ def score_campaign(result_dir, cases, reference_roots, *, evaluator=None):
 
 
 def cluster_bootstrap_primary(effects, target="semantic_16", control="active_control_16", seed=2601, n=4000):
+    effects = effects.loc[effects.site_valid].copy()
+    if effects.empty:
+        raise RuntimeError("No valid full-site positive-control pairs; cannot test sparse mediation")
     pivot = effects.pivot_table(index=["label", "pair_id", "seed"], columns="arm", values="margin_effect")
     paired = (pivot[target]-pivot[control]).dropna().rename("effect").reset_index()
     means = paired.groupby("label").effect.mean()
@@ -357,6 +360,22 @@ def run_campaign(cfg, manifest, *, output, reference_roots, checkpoint, discover
                  evaluation_seeds=(0,), max_eval_pairs=None, force=False):
     output = Path(output)
     (output/"images").mkdir(parents=True, exist_ok=True)
+    checkpoint = Path(checkpoint)
+    with checkpoint.open("rb") as fp:
+        digest = hashlib.sha256()
+        for chunk in iter(lambda: fp.read(4 * 1024 * 1024), b""):
+            digest.update(chunk)
+    fingerprint = {"checkpoint_sha256": digest.hexdigest(),
+                   "manifest_sha256": hashlib.sha256(manifest.to_csv(index=False).encode()).hexdigest(),
+                   "generation_sha256": hashlib.sha256(json.dumps(cfg["generation"],sort_keys=True).encode()).hexdigest(),
+                   "arms": list(ARMS), "site": MID, "steps": list(STEPS)}
+    meta_path = output/"protocol_fingerprint.json"
+    if meta_path.exists():
+        old = json.loads(meta_path.read_text())
+        if old != fingerprint:
+            raise RuntimeError("Cached experiment protocol/checkpoint changed; use a new output directory")
+    else:
+        meta_path.write_text(json.dumps(fingerprint,indent=2))
     discovery = manifest[manifest.split == "discovery"].copy()
     evaluation = manifest[manifest.split.isin(["evaluation", "confirmatory"])].copy()
     if max_eval_pairs is not None:
